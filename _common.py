@@ -10,8 +10,8 @@ import time
 import socket
 
 # Nibabel imports
-from nibabel.trackvis import read as nibLoad
-from nibabel.trackvis import write as nibSave
+from nibabelPATCHES.trackvis import read as nibLoad
+from nibabelPATCHES.trackvis import write as nibSave
 # Nipy imports
 from nipy.io.files import load as nipLoad
 from nipy.io.files import save as nipSave
