@@ -79,7 +79,9 @@ class crun(object):
         else:
             str_shellCmd        = str_prefix + str_cmd
         if self._b_sshDo and len(self._str_remoteHost):
-           str_suffix           = ">/dev/null 2>&1 "
+           if not self._b_echoStdOut:
+               str_suffix       = ">/dev/null 2>&1 "
+           else: str_suffix     = ''
            if self._b_detach:   str_embeddedDetach = "&"
            else:                str_embeddedDetach = ""
            str_shellCmd         = 'ssh %s@%s "nohup %s %s %s"' % (self._str_remoteUser,
@@ -172,8 +174,9 @@ class crun_mosixbash(crun):
 if __name__ == '__main__':
 
     # Create the crun instance
+    #shell       = crun()
     #shell       = crun_mosix(remoteUser="rudolphpienaar", remoteHost="rc-drno")
-    shell       = crun()
+    shell       = crun(remoteUser="rudolphpienaar", remoteHost="rc-drno")
 
     # Grab the command line args defining the app and args that need to be 
     # scheduled
