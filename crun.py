@@ -22,8 +22,11 @@ import sys
 class crun(object):
     """
         This family of functor classes provides a unified interface
-        to running shell-commands remotely either via ssh or a
-        scheduler on a cluster.
+        to running shell-commands in several contexts:
+        
+            - locally on the underlying OS
+            - remote host via ssh 
+            - remote cluster via scheduler 
 
         If the baseclass is "run", no cluster scheduling is performed
         and a straightforward remote exec via ssh is executed.
@@ -41,15 +44,18 @@ class crun(object):
     """    
         
     def __init__(self, **kwargs):
-        self._b_schulderSet     = False
+        self._b_schedulerSet    = False
         self._b_runCmd          = True          # Debugging flag
                                                 #+ will only execute command
                                                 #+ if flag is true
         self._b_sshDo           = False
         self._b_singleQuoteCmd  = False         # If True, force enclose of
                                                 #+ strcmd with single quotes
-        self._b_detach          = False         # If True, detach process from shell
+        self._b_detach          = False         # If True, detach process from
+                                                #+ shell
         self._b_echoCmd         = False
+        self._b_echoStdOut      = False
+        self._b_echoStdErr      = False
         self._str_remoteHost    = ""
         self._str_remoteUser    = ""
         self._str_remotePasswd  = ""
@@ -83,12 +89,13 @@ class crun(object):
                                                     str_embeddedDetach)
         
         ret                     = 0
-        if self._b_detach and self._b_schulderSet: str_shellCmd += " &"
+        if self._b_detach and self._b_schedulerSet: str_shellCmd += " &"
 
         if self._b_echoCmd: print str_shellCmd
         if self._b_runCmd:
 #            ret, self._str_stdout = misc.system_procRet(str_shellCmd)
             self._str_stdout    = misc.shellne(str_shellCmd)
+        if self._b_echoStdOut: print self._str_stdout
         return ret
     
     def scheduleCmd(self, *args):
@@ -108,6 +115,16 @@ class crun(object):
         if len(args):
             self._b_echoCmd     = args[0]
 
+    def echoStdOut(self, *args):
+        self._b_echoStdOut      = True
+        if len(args):
+            self._b_echoStdOut  = args[0]
+            
+    def echoStdErr(self, *args):
+        self._b_echoStdErr      = True
+        if len(args):
+            self._b_echoStdErr  = args[0]
+            
     def detach(self, *args):
         self._b_detach          = True
         if len(args):
@@ -132,7 +149,7 @@ class crun(object):
 
 class crun_mosix(crun):
     def __init__(self, **kwargs):
-        self._b_schulderSet     = True
+        self._b_schedulerSet     = True
         crun.__init__(self, **kwargs)
         self._str_scheduleCmd   = 'mosrun'
         self._str_scheduleArgs  = '-e -E -q -b '
@@ -142,7 +159,7 @@ class crun_mosix(crun):
 
 class crun_mosixbash(crun):
     def __init__(self, **kwargs):
-        self._b_schulderSet     = True
+        self._b_schedulerSet     = True
         crun.__init__(self, **kwargs)
         self._str_scheduleCmd   = 'mosix_run.bash'
         self._str_scheduleArgs  = '-c'
@@ -155,7 +172,8 @@ class crun_mosixbash(crun):
 if __name__ == '__main__':
 
     # Create the crun instance
-    shell       = crun_mosix(remoteUser="rudolphpienaar", remoteHost="rc-drno")
+    #shell       = crun_mosix(remoteUser="rudolphpienaar", remoteHost="rc-drno")
+    shell       = crun()
 
     # Grab the command line args defining the app and args that need to be 
     # scheduled
@@ -165,6 +183,7 @@ if __name__ == '__main__':
     
     # Set some parameters for this shell
     shell.echo()
+    shell.echoStdOut()
     shell.detach()
 #    shell.dontRun()
 
