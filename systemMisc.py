@@ -1037,7 +1037,7 @@ def shellne(command):
     return data
 ## end of http://code.activestate.com/recipes/52296/ }}}
 
-def _mkdir(newdir):
+def mkdir(newdir):
     """
     works the way a good mkdir should :)
         - already exists, silently complete
@@ -1052,11 +1052,36 @@ def _mkdir(newdir):
     else:
         head, tail = os.path.split(newdir)
         if head and not os.path.isdir(head):
-            _mkdir(head)
+            mkdir(head)
         #print "_mkdir %s" % repr(newdir)
         if tail:
             os.mkdir(newdir)
 
+# From stackoverflow, answered Sep 25 '08 at 21:43 by S.Lott
+# http://stackoverflow.com/questions/136168/get-last-n-lines-of-a-file-with-python-similar-to-tail
+def tail( f, window=20 ):
+    BUFSIZ = 1024
+    f.seek(0, 2)
+    bytes = f.tell()
+    size = window
+    block = -1
+    data = []
+    while size > 0 and bytes > 0:
+        if (bytes - BUFSIZ > 0):
+            # Seek back one whole BUFSIZ
+            f.seek(block*BUFSIZ, 2)
+            # read BUFFER
+            data.append(f.read(BUFSIZ))
+        else:
+            # file too small, start from begining
+            f.seek(0,0)
+            # only read what was not read
+            data.append(f.read(bytes))
+        linesFound = data[-1].count('\n')
+        size -= linesFound
+        bytes -= BUFSIZ
+        block -= 1
+    return '\n'.join(''.join(data).splitlines()[-window:])         
     
 def file_exists(astr_fileName):
     try:
