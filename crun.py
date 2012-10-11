@@ -63,6 +63,8 @@ class crun(object):
         self._str_scheduleCmd   = ""
         self._str_scheduleArgs  = ""
         self._str_stdout        = ""
+        self._str_stderr        = ""
+        self._exitCode          = 0
         for key, value in kwargs.iteritems():
             if key == "remoteHost":
                 self._b_sshDo           = True     
@@ -96,9 +98,9 @@ class crun(object):
         if self._b_echoCmd: print str_shellCmd
         if self._b_runCmd:
 #            ret, self._str_stdout = misc.system_procRet(str_shellCmd)
-            self._str_stdout    = misc.shellne(str_shellCmd)
+            self._str_stdout, self._str_stderr, self._exitCode    = misc.shell(str_shellCmd)
         if self._b_echoStdOut: print self._str_stdout
-        return ret
+        return self._str_stdout, self._str_stderr, self._exitCode
     
     def scheduleCmd(self, *args):
         if len(args):
@@ -122,6 +124,15 @@ class crun(object):
         if len(args):
             self._b_echoStdOut  = args[0]
             
+    def stdout(self):
+        return self._str_stdout
+            
+    def stderr(self):
+        return self._str_stderr
+        
+    def exitCode(self):
+        return self._exitCode
+
     def echoStdErr(self, *args):
         self._b_echoStdErr      = True
         if len(args):
