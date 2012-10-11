@@ -992,7 +992,7 @@ def shell(command):
         Runs 'commands' on the underlying shell and keeps the stdout and
         stderr stream separate.
  
-        Raises a RuntimeException on any shell exec errors.
+        Returns [stdout, stderr, exitCode]
     """
     child = popen2.Popen3(command, 1) # capture stdout and stderr from command
     child.tochild.close()             # don't need to talk to child
@@ -1017,9 +1017,7 @@ def shell(command):
         if outeof and erreof: break
         select.select([],[],[],.1) # give a little time for buffers to fill
     err = child.wait()
-    if err != 0: 
-        raise RuntimeError, '%s failed w/ exit code %d\n%s' % (command, err, errdata)
-    return outdata
+    return outdata, errdata, err
 
 def shellne(command):
     """
