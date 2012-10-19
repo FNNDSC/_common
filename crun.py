@@ -56,6 +56,7 @@ class crun(object):
         self._b_echoCmd         = False
         self._b_echoStdOut      = False
         self._b_echoStdErr      = False
+        self._b_devnull         = False
         self._str_remoteHost    = ""
         self._str_remoteUser    = ""
         self._str_remotePasswd  = ""
@@ -65,32 +66,38 @@ class crun(object):
         self._str_stdout        = ""
         self._str_stderr        = ""
         self._exitCode          = 0
+
+        self._str_cmdPrefix     = ""
+        
         for key, value in kwargs.iteritems():
             if key == "remoteHost":
                 self._b_sshDo           = True     
                 self._str_remoteHost    = value
             if key == "remoteUser":     self._str_remoteUser    = value
             if key == "remotePasswd":   self._str_remotePasswd  = value
+            if key == 'cmdPrefix':      self._str_cmdPrefix     = value
         
     
-    def __call__(self, str_cmd):
+    def __call__(self, str_cmd, **kwargs):
         str_prefix              = self._str_scheduleCmd + " " + \
                                   self._str_scheduleArgs
         if self._b_singleQuoteCmd:
             str_shellCmd        = str_prefix + (" '%s'" % str_cmd)
         else:
             str_shellCmd        = str_prefix + str_cmd
-        if self._b_sshDo and len(self._str_remoteHost):
-           if not self._b_echoStdOut:
-               str_suffix       = ">/dev/null 2>&1 "
-           else: str_suffix     = ''
-           if self._b_detach:   str_embeddedDetach = "&"
-           else:                str_embeddedDetach = ""
-           str_shellCmd         = 'ssh %s@%s "nohup %s %s %s"' % (self._str_remoteUser,
-                                                    self._str_remoteHost,
+        if self._b_devnull:
+            str_suffix       = ">/dev/null 2>&1 "
+        else: str_suffix     = ''
+        if self._b_detach:   str_embeddedDetach = "&"
+        else:                str_embeddedDetach = ""
+        str_shellCmd            = '%s %s %s %s' % ( self._str_cmdPrefix,
                                                     str_shellCmd,
                                                     str_suffix,
                                                     str_embeddedDetach)
+        if self._b_sshDo and len(self._str_remoteHost):
+           str_shellCmd         = 'ssh %s@%s  "%s"' % (self._str_remoteUser,
+                                                    self._str_remoteHost,
+                                                    str_shellCmd)
         
         ret                     = 0
         if self._b_detach and self._b_schedulerSet: str_shellCmd += " &"
@@ -98,7 +105,8 @@ class crun(object):
         if self._b_echoCmd: print str_shellCmd
         if self._b_runCmd:
 #            ret, self._str_stdout = misc.system_procRet(str_shellCmd)
-            self._str_stdout, self._str_stderr, self._exitCode    = misc.shell(str_shellCmd)
+            self._str_stdout, self._str_stderr, self._exitCode    = \
+                    misc.shell(str_shellCmd, **kwargs)
         if self._b_echoStdOut: print self._str_stdout
         return self._str_stdout, self._str_stderr, self._exitCode
     
@@ -142,6 +150,12 @@ class crun(object):
         self._b_detach          = True
         if len(args):
             self._b_detach      = args[0]
+
+    def devnull(self, *args):
+        if len(args):
+            self._b_sshDo       = args[0]
+        else:
+            return self._b_devnull
     
     def ssh(self, *args):
         self._b_sshDo           = True
@@ -162,13 +176,13 @@ class crun(object):
 
 class crun_mosix(crun):
     def __init__(self, **kwargs):
-        self._b_schedulerSet     = True
+        self._b_schedulerSet    = True
         crun.__init__(self, **kwargs)
-        self._str_scheduleCmd   = 'mosrun'
-        self._str_scheduleArgs  = '-e -E -q -b '
+        self._str_scheduleCmd   = 'mosbatch'
+        self._str_scheduleArgs  = '-q -b '
         
-    def __call__(self, str_cmd):
-        return crun.__call__(self, str_cmd)
+    def __call__(self, str_cmd, **kwargs):
+        return crun.__call__(self, str_cmd, **kwargs)
 
 class crun_mosixbash(crun):
     def __init__(self, **kwargs):
