@@ -975,7 +975,7 @@ def subprocess_eval(str_command, b_echoCommand=0):
         retcode = call(str_forRet, shell=True)
     except OSError, e:
         b_OK = False
-    return retcode, str_stdout, str_stderr
+    return str_stdout, str_stderr, retcode
 
 ## start of http://code.activestate.com/recipes/52296/ }}}
 ## Some mods by RP
@@ -987,13 +987,20 @@ def makeNonBlocking(fd):
         fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NDELAY)
     
 
-def shell(command):
+def shell(command, **kwargs):
     """
-        Runs 'commands' on the underlying shell and keeps the stdout and
+        Runs 'command' on the underlying shell and keeps the stdout and
         stderr stream separate.
  
         Returns [stdout, stderr, exitCode]
     """
+    b_stdoutflush       = False
+    b_stderrflush       = False
+    b_waitForChild      = True
+    for key, val in kwargs.iteritems():
+        if key == 'stdoutflush':        b_stdoutflush   = val
+        if key == 'stderrflush':        b_stderrflush   = val
+        if key == 'waitForChild':       b_waitForChild  = val
     child = popen2.Popen3(command, 1) # capture stdout and stderr from command
     child.tochild.close()             # don't need to talk to child
     outfile = child.fromchild 
@@ -1004,14 +1011,16 @@ def shell(command):
     makeNonBlocking(errfd)
     outdata = errdata = ''
     outeof = erreof = 0
-    while 1:
+    while b_waitForChild:
         ready = select.select([outfd,errfd],[],[]) # wait for input
         if outfd in ready[0]:
             outchunk = outfile.read()
+            if b_stdoutflush: sys.stdout.write(outchunk)
             if outchunk == '': outeof = 1
             outdata = outdata + outchunk
         if errfd in ready[0]:
             errchunk = errfile.read()
+            if b_stderrflush: sys.stderr.write(errchunk)
             if errchunk == '': erreof = 1
             errdata = errdata + errchunk
         if outeof and erreof: break
