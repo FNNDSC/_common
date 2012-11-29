@@ -102,7 +102,7 @@ class crun(object):
         ret                     = 0
         if self._b_detach and self._b_schedulerSet: str_shellCmd += " &"
 
-        if self._b_echoCmd: sys.stdout.write('%s\n', str_shellCmd)
+        if self._b_echoCmd: sys.stdout.write('%s\n' % str_shellCmd)
         if self._b_runCmd:
 #            ret, self._str_stdout = misc.system_procRet(str_shellCmd)
             self._str_stdout, self._str_stderr, self._exitCode    = \
