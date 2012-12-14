@@ -22,7 +22,7 @@
 #
 
 # System imports
-import          os
+import          os, fnmatch
 import          sys
 import          time
 import          string
@@ -1044,7 +1044,7 @@ def shellne(command):
     return data
 ## end of http://code.activestate.com/recipes/52296/ }}}
 
-def mkdir(newdir):
+def mkdir(newdir, mode=0775):
     """
     works the way a good mkdir should :)
         - already exists, silently complete
@@ -1063,6 +1063,8 @@ def mkdir(newdir):
         #print "_mkdir %s" % repr(newdir)
         if tail:
             os.mkdir(newdir)
+            #print "chmod %d %s" % (mode, newdir)
+            #os.chmod(newdir, mode)
 
 # From stackoverflow, answered Sep 25 '08 at 21:43 by S.Lott
 # http://stackoverflow.com/questions/136168/get-last-n-lines-of-a-file-with-python-similar-to-tail
@@ -1097,6 +1099,25 @@ def file_exists(astr_fileName):
         return True
     except IOError:
         return False
+
+def locate(pattern, root=os.curdir):
+    '''Locate all files matching supplied filename pattern in and below
+    supplied root directory.'''
+    for path, dirs, files in os.walk(os.path.abspath(root)):
+        for filename in fnmatch.filter(files, pattern):
+            yield os.path.join(path, filename)
+
+def find(pattern, root=os.curdir):
+    '''Helper around 'locate' '''
+    hits = ''
+    for F in locate(pattern, root):
+        hits = hits + F + '\n'
+    l = hits.split('\n')
+    if(not len(l[-1])): l.pop()
+    if len(l) == 1 and not len(l[0]):
+        return None
+    else:
+        return l
 
 def exefile_existsOnPath(astr_fileName):
         try:
