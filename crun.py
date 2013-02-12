@@ -213,7 +213,7 @@ if __name__ == '__main__':
 
     # Create the crun instance
     #shell       = crun()
-    #shell       = crun_mosix(remoteUser="rudolphpienaar", remoteHost="rc-drno")
+    #shell       = crun_mosix(remoteUser="rudolphpienaar", remoteHost="rc-twice")
     shell       = crun(remoteUser="rudolphpienaar", remoteHost="rc-drno")
 
     # Grab the command line args defining the app and args that need to be 
