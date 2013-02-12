@@ -226,7 +226,7 @@ if __name__ == '__main__':
     shell.echo()
     shell.echoStdOut()
     shell.detach()
-#    shell.dontRun()
+    # shell.dontRun()
 
     # And now run it!
     misc.tic()
