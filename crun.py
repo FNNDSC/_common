@@ -175,13 +175,26 @@ class crun(object):
             if key == "passwd": self._str_remotePasswd = value
 
 class crun_mosix(crun):
+
+    def priority(self, *args):
+        if len(args):
+            self._priority      = args[0]
+        else:
+            return self._priority
+
+    def schedulerArgs(self):
+        return "-q%d -b " % self._priority
+    
     def __init__(self, **kwargs):
         self._b_schedulerSet    = True
         crun.__init__(self, **kwargs)
+
+        self._priority          = 50
         self._str_scheduleCmd   = 'mosbatch'
         self._str_scheduleArgs  = '-q -b '
         
     def __call__(self, str_cmd, **kwargs):
+        self._str_scheduleArgs  = self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
 
 class crun_mosixbash(crun):
