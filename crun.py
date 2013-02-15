@@ -104,7 +104,7 @@ class crun(object):
 
         if self._b_echoCmd: sys.stdout.write('%s\n' % str_shellCmd)
         if self._b_runCmd:
-	# ret, self._str_stdout = misc.system_procRet(str_shellCmd)
+#            ret, self._str_stdout = misc.system_procRet(str_shellCmd)
             self._str_stdout, self._str_stderr, self._exitCode    = \
                     misc.shell(str_shellCmd, **kwargs)
         if self._b_echoStdOut: sys.stdout.write(self._str_stdout)
@@ -182,8 +182,12 @@ class crun_mosix(crun):
         else:
             return self._priority
 
-    def schedulerArgs(self):
-        return "-q%d -b " % self._priority
+    def scheduleArgs(self, *args):
+        if len(args):
+            self._str_scheduleArgs      = args[0]
+        else:
+            self._str_scheduleArgs      = "-q%d -b " % self._priority
+        return self._str_scheduleArgs
     
     def __init__(self, **kwargs):
         self._b_schedulerSet    = True
@@ -194,7 +198,7 @@ class crun_mosix(crun):
         self._str_scheduleArgs  = '-q -b '
         
     def __call__(self, str_cmd, **kwargs):
-        self._str_scheduleArgs  = self.scheduleArgs()
+        self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
 
 class crun_mosixbash(crun):
