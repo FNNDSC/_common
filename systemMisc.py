@@ -1100,6 +1100,17 @@ def file_exists(astr_fileName):
     except IOError:
         return False
 
+def file_writeOnce(astr_fileName, astr_val):
+    '''
+    Simple "one-shot" writer. Opens <astr_fileName>
+    and saves <astr_val> to file, then closes
+    file.
+    '''
+    FILE = open(astr_fileName, 'w')
+    FILE.write(astr_val)
+    FILE.close()
+        
+
 def locate(pattern, root=os.curdir):
     '''Locate all files matching supplied filename pattern in and below
     supplied root directory.'''
