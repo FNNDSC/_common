@@ -193,9 +193,11 @@ class crun_mosix(crun):
         if len(args):
             self._str_scheduleArgs      = args[0]
         else:
-            self._str_scheduleArgs      = "-q%d -b " % self._priority
+            self._str_scheduleArgs     += "-q%d " % self._priority 
             if self._b_scheduleOnHostOnly:
                 self._str_scheduleArgs += "-r %s " % self._str_scheduleHostOnly
+            else:
+                self._str_scheduleArgs += "-b " % self._priority
         return self._str_scheduleArgs
     
     def __init__(self, **kwargs):
@@ -206,7 +208,7 @@ class crun_mosix(crun):
 
         self._priority          = 50
         self._str_scheduleCmd   = 'mosbatch'
-        self._str_scheduleArgs  = '-q -b '
+        self._str_scheduleArgs  = ''
         
     def __call__(self, str_cmd, **kwargs):
         self.scheduleArgs()
