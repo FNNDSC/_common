@@ -195,7 +195,7 @@ class crun_mosix(crun):
         else:
             self._str_scheduleArgs      = "-q%d -b " % self._priority
             if self._b_scheduleOnHostOnly:
-                self._str_scheduleArgs += "-r %s" % self._str_scheduleHostOnly
+                self._str_scheduleArgs += "-r %s " % self._str_scheduleHostOnly
         return self._str_scheduleArgs
     
     def __init__(self, **kwargs):
