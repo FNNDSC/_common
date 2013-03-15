@@ -182,15 +182,26 @@ class crun_mosix(crun):
         else:
             return self._priority
 
+    def scheduleHostOnly(self, *args):
+        if len(args):
+            self._str_scheduleHostOnly = args[0]
+            self._b_scheduleOnHostOnly = True
+        else:
+            return self._str_scheduleHostOnly
+
     def scheduleArgs(self, *args):
         if len(args):
             self._str_scheduleArgs      = args[0]
         else:
             self._str_scheduleArgs      = "-q%d -b " % self._priority
+            if self._b_scheduleOnHostOnly:
+                self._str_scheduleArgs += "-r %s" % self._str_scheduleHostOnly
         return self._str_scheduleArgs
     
     def __init__(self, **kwargs):
-        self._b_schedulerSet    = True
+        self._b_schedulerSet            = True
+        self._b_scheduleOnHostOnly      = False
+        self._str_scheduleHostOnly      = ''
         crun.__init__(self, **kwargs)
 
         self._priority          = 50
