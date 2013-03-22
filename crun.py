@@ -174,6 +174,56 @@ class crun(object):
         for key, value in kwargs.iteritems():
             if key == "passwd": self._str_remotePasswd = value
 
+class crun_torque(crun):
+
+    def priority(self, *args):
+        if len(args):
+            self._priority      = args[0]
+        else:
+            return self._priority
+
+    def scheduleHostOnly(self, *args):
+        if len(args):
+            self._str_scheduleHostOnly = args[0]
+            self._b_scheduleOnHostOnly = True
+        else:
+            return self._str_scheduleHostOnly
+
+    def scheduleMaxQueue(self, *args):
+        if len(args):
+            self._str_maxQueue = args[0]
+        else:
+            return self._str_maxQueue
+
+    def emailUser(self, *args):
+        if len(args):
+            self._str_emailUser = args[0]
+        else:
+            return self._str_emailUser
+
+    def scheduleArgs(self, *args):
+        if len(args):
+            self._str_scheduleArgs      = args[0]
+        else:
+            self._str_scheduleArgs     += "-q % " % self._str_maxQueue
+        return self._str_scheduleArgs
+
+    def __init__(self, **kwargs):
+        self._b_singleQuoteCmd          = True
+        self._str_emailUser             = "rudolph"
+        self._str_maxQueue              = "max200"
+        self._b_schedulerSet            = True
+        crun.__init__(self, **kwargs)
+
+        self._priority                  = 50
+        self._str_scheduleCmd           = 'pbsubmit'
+        self._str_scheduleArgs          = ''
+
+    def __call__(self, str_cmd, **kwargs):
+        self.scheduleArgs()
+        return crun.__call__(self, str_cmd, **kwargs)
+
+
 class crun_mosix(crun):
 
     def priority(self, *args):
