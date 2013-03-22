@@ -174,7 +174,7 @@ class crun(object):
         for key, value in kwargs.iteritems():
             if key == "passwd": self._str_remotePasswd = value
 
-class crun_torque(crun):
+class crun_launchpad(crun):
 
     def priority(self, *args):
         if len(args):
