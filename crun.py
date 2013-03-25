@@ -205,7 +205,7 @@ class crun_launchpad(crun):
         if len(args):
             self._str_scheduleArgs      = args[0]
         else:
-            self._str_scheduleArgs     += "-q % " % self._str_maxQueue
+            self._str_scheduleArgs     += "-q %s " % self._str_maxQueue
         return self._str_scheduleArgs
 
     def __init__(self, **kwargs):
