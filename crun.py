@@ -66,6 +66,7 @@ class crun(object):
         self._str_stdout        = ""
         self._str_stderr        = ""
         self._exitCode          = 0
+        self._str_cmd           = ""
 
         self._str_cmdPrefix     = ""
         
@@ -79,10 +80,11 @@ class crun(object):
         
     
     def __call__(self, str_cmd, **kwargs):
+        self._str_cmd           = str_cmd
         str_prefix              = self._str_scheduleCmd + " " + \
                                   self._str_scheduleArgs
         if self._b_singleQuoteCmd:
-            str_shellCmd        = str_prefix + (" '%s'" % str_cmd)
+            str_shellCmd        = str_prefix + (" %s%s%s" % (chr(39), str_cmd, chr(39)))
         else:
             str_shellCmd        = str_prefix + str_cmd
         if self._b_devnull:
@@ -209,11 +211,12 @@ class crun_launchpad(crun):
         return self._str_scheduleArgs
 
     def __init__(self, **kwargs):
+        crun.__init__(self, **kwargs)
+
         self._b_singleQuoteCmd          = True
         self._str_emailUser             = "rudolph"
         self._str_maxQueue              = "max200"
         self._b_schedulerSet            = True
-        crun.__init__(self, **kwargs)
 
         self._priority                  = 50
         self._str_scheduleCmd           = 'pbsubmit'
@@ -222,8 +225,33 @@ class crun_launchpad(crun):
     def __call__(self, str_cmd, **kwargs):
         self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
-
-
+    
+    def queue(self, **kwargs):
+        """
+        Returns a tuple:
+            (number_of_jobs_running, 
+             number_of_jobs_scheduled, 
+             number_of_jobs_completed)
+        """
+        if self._b_sshDo and len(self._str_remoteHost):
+            shellQueue  = crun( remoteHost=self._str_remoteHost,
+                                remoteUser=self._str_remoteUser)
+            str_user    = self._str_remoteUser
+        else:
+            shellQueue  = crun()
+            str_user    = crun('whoami').stdout().strip()
+        shellQueue('qstat | grep %s | wc -l ' % str_user)
+        str_processInSchedulerCount     = shellQueue.stdout().strip()
+        shellQueue("qstat | grep %s | awk '{print $5}' | grep 'C' | wc -l" %\
+                    str_user)
+        str_processCompletedCount       = shellQueue.stdout().strip()
+        shellQueue("qstat | grep %s | awk '{print $5}' | grep 'R' | wc -l" %\
+                    str_user)
+        str_processRunningCount         = shellQueue.stdout().strip()
+        return (str_processRunningCount, 
+                str_processInSchedulerCount,
+                str_processCompletedCount)
+        
 class crun_mosix(crun):
 
     def priority(self, *args):
