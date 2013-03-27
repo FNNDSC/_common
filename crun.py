@@ -203,19 +203,53 @@ class crun_launchpad(crun):
         else:
             return self._str_emailUser
 
+    def emailWhenDone(self, *args):
+        if len(args):
+            self._b_emailWhenDone = args[0]
+        else:
+            return self._b_emailWhenDone
+
     def scheduleArgs(self, *args):
         if len(args):
             self._str_scheduleArgs      = args[0]
         else:
-            self._str_scheduleArgs     += "-q %s -c " % self._str_maxQueue
+            if self._b_emailWhenDone and len(self._str_emailUser):
+                self._str_scheduleArgs += "-m %s " % self._str_emailUser
+            self._str_scheduleArgs     += "-q %s -c " % self._str_queue
         return self._str_scheduleArgs
+
+    def clusterName(self, *args):
+        if len(args):
+            self._str_clusterName = args[0]
+        else:
+            return self._str_clusterName
+
+    def clusterType(self, *args):
+        if len(args):
+            self._str_clusterType = args[0]
+        else:
+            return self._str_clusterType
+
+    def clusterScheduler(self, *args):
+        if len(args):
+            self._str_clusterScheduler = args[0]
+        else:
+            return self._str_clusterScheduler
+
 
     def __init__(self, **kwargs):
         crun.__init__(self, **kwargs)
+        
+        self._str_clusterName           = "launchpad"
+        self._str_clusterType           = "torque-based"
+        self._str_clusterScheduler      = 'qsub'
+        
+        self._b_emailWhenDone           = False
 
+        self._str_jobInfoDir            = "/pbs"
         self._b_singleQuoteCmd          = True
         self._str_emailUser             = "rudolph"
-        self._str_maxQueue              = "max200"
+        self._str_queue                 = "max200"
         self._b_schedulerSet            = True
 
         self._priority                  = 50
@@ -223,10 +257,12 @@ class crun_launchpad(crun):
         self._str_scheduleArgs          = ''
 
     def __call__(self, str_cmd, **kwargs):
+        if len(self._str_remoteUser):
+            self._str_jobInfoDir    = "/pbs/%s" % self._str_remoteUser
         self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
     
-    def queue(self, **kwargs):
+    def queueInfo(self, **kwargs):
         """
         Returns a tuple:
             (number_of_jobs_running, 
@@ -251,6 +287,128 @@ class crun_launchpad(crun):
         return (str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
+
+class crun_lsf(crun):
+
+    def priority(self, *args):
+        if len(args):
+            self._priority      = args[0]
+        else:
+            return self._priority
+
+    def scheduleHostOnly(self, *args):
+        if len(args):
+            self._str_scheduleHostOnly = args[0]
+            self._b_scheduleOnHostOnly = True
+        else:
+            return self._str_scheduleHostOnly
+
+    def scheduleMaxQueue(self, *args):
+        if len(args):
+            self._str_maxQueue = args[0]
+        else:
+            return self._str_maxQueue
+
+    def emailUser(self, *args):
+        if len(args):
+            self._str_emailUser = args[0]
+        else:
+            return self._str_emailUser
+
+    def emailWhenDone(self, *args):
+        if len(args):
+            self._b_emailWhenDone = args[0]
+        else:
+            return self._b_emailWhenDone
+        
+    def jobID(self, *args):
+        if len(args):
+            self._str_jobID = args[0]
+        else:
+            return self._str_jobID
+
+    def scheduleArgs(self, *args):
+        if len(args):
+            self._str_scheduleArgs      = args[0]
+        else:
+            if self._b_emailWhenDone and len(self._str_emailUser):
+                self._str_scheduleArgs += "-u %s -N " % self._str_emailUser
+            if len(self._str_jobID):
+                self._str_scheduleArgs += "-J %s " % self._str_jobID
+            self._str_scheduleArgs     += "-q %s " % self._str_queue
+        return self._str_scheduleArgs
+
+    def clusterName(self, *args):
+        if len(args):
+            self._str_clusterName = args[0]
+        else:
+            return self._str_clusterName
+
+    def clusterType(self, *args):
+        if len(args):
+            self._str_clusterType = args[0]
+        else:
+            return self._str_clusterType
+
+    def clusterScheduler(self, *args):
+        if len(args):
+            self._str_clusterScheduler = args[0]
+        else:
+            return self._str_clusterScheduler
+
+
+    def __init__(self, **kwargs):
+        crun.__init__(self, **kwargs)
+
+        self._str_clusterName           = "erisone"
+        self._str_clusterType           = "HP-LSF"
+        self._str_clusterScheduler      = 'bsub'
+
+        self._str_jobID                 = ""
+        
+        self._b_emailWhenDone           = False
+
+        self._str_jobInfoDir            = "~/lst/output"
+        self._b_singleQuoteCmd          = False
+        self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
+        self._str_queue                 = "normal"
+        self._b_schedulerSet            = True
+
+        self._priority                  = 50
+        self._str_scheduleCmd           = 'bsub'
+        self._str_scheduleArgs          = ''
+
+    def __call__(self, str_cmd, **kwargs):
+        self.scheduleArgs()
+        return crun.__call__(self, str_cmd, **kwargs)
+    
+    def queueInfo(self, **kwargs):
+        """
+        Returns a tuple:
+            (number_of_jobs_running, 
+             number_of_jobs_scheduled, 
+             number_of_jobs_completed)
+        """
+        if self._b_sshDo and len(self._str_remoteHost):
+            shellQueue  = crun( remoteHost=self._str_remoteHost,
+                                remoteUser=self._str_remoteUser)
+            str_user    = self._str_remoteUser
+        else:
+            shellQueue  = crun()
+            str_user    = crun('whoami').stdout().strip()
+        shellQueue('bjobs | grep %s | wc -l ' % str_user)
+        str_processInSchedulerCount     = shellQueue.stdout().strip()
+        shellQueue("bjobs | grep %s | awk '{print $3}' | grep 'RUN' | wc -l" %\
+                    str_user)
+        str_processRunningCount         = shellQueue.stdout().strip()
+        completedCount                  = int(str_processInSchedulerCount) - \
+                                          int(str_processRunningCount)
+        str_processCompletedCount       = str(completedCount)                                
+        str_processCompletedCount       = shellQueue.stdout().strip()
+        return (str_processRunningCount, 
+                str_processInSchedulerCount,
+                str_processCompletedCount)
+
         
 class crun_mosix(crun):
 
