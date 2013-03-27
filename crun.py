@@ -425,6 +425,24 @@ class crun_mosix(crun):
         else:
             return self._str_scheduleHostOnly
 
+    def emailUser(self, *args):
+        if len(args):
+            self._str_emailUser = args[0]
+        else:
+            return self._str_emailUser
+
+    def emailWhenDone(self, *args):
+        if len(args):
+            self._b_emailWhenDone = args[0]
+        else:
+            return self._b_emailWhenDone
+
+    def jobID(self, *args):
+        if len(args):
+            self._str_jobID = args[0]
+        else:
+            return self._str_jobID
+
     def scheduleArgs(self, *args):
         if len(args):
             self._str_scheduleArgs      = args[0]
@@ -435,20 +453,83 @@ class crun_mosix(crun):
             else:
                 self._str_scheduleArgs += "-b " % self._priority
         return self._str_scheduleArgs
+
+    def clusterName(self, *args):
+        if len(args):
+            self._str_clusterName = args[0]
+        else:
+            return self._str_clusterName
+
+    def clusterType(self, *args):
+        if len(args):
+            self._str_clusterType = args[0]
+        else:
+            return self._str_clusterType
+
+    def clusterScheduler(self, *args):
+        if len(args):
+            self._str_clusterScheduler = args[0]
+        else:
+            return self._str_clusterScheduler
+
     
     def __init__(self, **kwargs):
+        self._str_clusterName           = "PICES"
+        self._str_clusterType           = "MOSIX"
+        self._str_clusterScheduler      = 'mosbatch'
+
+        self._str_jobID                 = ""
+
+        self._b_emailWhenDone           = False
+
+        self._str_jobInfoDir            = ""
+        self._b_singleQuoteCmd          = False
+        self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
+        self._str_queue                 = "normal"
         self._b_schedulerSet            = True
         self._b_scheduleOnHostOnly      = False
         self._str_scheduleHostOnly      = ''
+
         crun.__init__(self, **kwargs)
 
-        self._priority          = 50
-        self._str_scheduleCmd   = 'mosbatch'
-        self._str_scheduleArgs  = ''
+        self._priority                  = 50
+        self._str_scheduleCmd           = 'mosbatch'
+        self._str_scheduleArgs          = ''
         
     def __call__(self, str_cmd, **kwargs):
         self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
+
+    def queueInfo(self, **kwargs):
+        """
+        Returns a tuple:
+            (number_of_jobs_running,
+             number_of_jobs_scheduled,
+             number_of_jobs_completed)
+        """
+        for key, val in kwargs.iteritems():
+            if key == 'blockProcess':   str_blockProcess = val
+        
+        if self._b_sshDo and len(self._str_remoteHost):
+            shellQueue  = crun( remoteHost=self._str_remoteHost,
+                                remoteUser=self._str_remoteUser)
+            str_user    = self._str_remoteUser
+        else:
+            shellQueue  = crun()
+            str_user    = crun('whoami').stdout().strip()
+        shellQueue('mosq listall | grep %s | grep %s | wc -l ' % (str_blockProcess, str_user))
+        str_processInSchedulerCount     = shellQueue.stdout().strip()
+        shellQueue("mosq listall | grep %s | grep %s | grep 'RUN' | wc -l" %\
+                    str_blockProcess, str_user)
+        str_processRunningCount         = shellQueue.stdout().strip()
+        completedCount                  = int(str_processInSchedulerCount) - \
+                                          int(str_processRunningCount)
+        str_processCompletedCount       = str(completedCount)
+        str_processCompletedCount       = shellQueue.stdout().strip()
+        return (str_processRunningCount,
+                str_processInSchedulerCount,
+                str_processCompletedCount)
+
 
 class crun_mosixbash(crun):
     def __init__(self, **kwargs):
