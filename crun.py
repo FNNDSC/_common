@@ -60,6 +60,7 @@ class crun(object):
         self._str_remoteHost    = ""
         self._str_remoteUser    = ""
         self._str_remotePasswd  = ""
+        self._str_remotePort    = "22"
 
         self._str_scheduleCmd   = ""
         self._str_scheduleArgs  = ""
@@ -71,9 +72,13 @@ class crun(object):
         self._str_cmdPrefix     = ""
         
         for key, value in kwargs.iteritems():
+            if key == "remotePort":     self._str_remotePort    = value
             if key == "remoteHost":
-                self._b_sshDo           = True     
-                self._str_remoteHost    = value
+                self._b_sshDo           = True
+                l_remoteHost    = value.split(':')
+                self._str_remoteHost = l_remoteHost[0]
+                if len(l_remoteHost) == 2:
+                    self._str_remotePort = l_remoteHost[1]
             if key == "remoteUser":     self._str_remoteUser    = value
             if key == "remotePasswd":   self._str_remotePasswd  = value
             if key == 'cmdPrefix':      self._str_cmdPrefix     = value
@@ -97,7 +102,9 @@ class crun(object):
                                                     str_suffix,
                                                     str_embeddedDetach)
         if self._b_sshDo and len(self._str_remoteHost):
-           str_shellCmd         = 'ssh %s@%s  "%s"' % (self._str_remoteUser,
+           str_shellCmd         = 'ssh -p %s %s@%s  "%s" ' % (
+                                                    self._str_remotePort,
+                                                    self._str_remoteUser,
                                                     self._str_remoteHost,
                                                     str_shellCmd)
         
@@ -271,6 +278,7 @@ class crun_launchpad(crun):
         """
         if self._b_sshDo and len(self._str_remoteHost):
             shellQueue  = crun( remoteHost=self._str_remoteHost,
+                                remotePort=self._str_remotePort,
                                 remoteUser=self._str_remoteUser)
             str_user    = self._str_remoteUser
         else:
@@ -391,6 +399,7 @@ class crun_lsf(crun):
         """
         if self._b_sshDo and len(self._str_remoteHost):
             shellQueue  = crun( remoteHost=self._str_remoteHost,
+                                remotePort=self._str_remotePort,
                                 remoteUser=self._str_remoteUser)
             str_user    = self._str_remoteUser
         else:
@@ -451,7 +460,7 @@ class crun_mosix(crun):
             if self._b_scheduleOnHostOnly:
                 self._str_scheduleArgs += "-r%s " % self._str_scheduleHostOnly
             else:
-                self._str_scheduleArgs += "-b " % self._priority
+                self._str_scheduleArgs += "-b "
         return self._str_scheduleArgs
 
     def clusterName(self, *args):
@@ -512,6 +521,7 @@ class crun_mosix(crun):
         
         if self._b_sshDo and len(self._str_remoteHost):
             shellQueue  = crun( remoteHost=self._str_remoteHost,
+                                remotePort=self._str_remotePort,
                                 remoteUser=self._str_remoteUser)
             str_user    = self._str_remoteUser
         else:
