@@ -17,6 +17,7 @@
 
 # System imports
 import systemMisc as misc
+import C_mail
 import sys
 
 class crun(object):
@@ -48,7 +49,15 @@ class crun(object):
         self._b_runCmd          = True          # Debugging flag
                                                 #+ will only execute command
                                                 #+ if flag is true
+
+        self._b_disassociate    = False         # This disassociates the command from
+                                                # its parent shell. Essentially, this
+                                                # wraps the command in parentheses.
+
         self._b_sshDo           = False
+        self._b_sshDetach       = False         # An additional ssh-only detach
+                                                # that, if true, detaches the 
+                                                # ssh command itself.
         self._b_singleQuoteCmd  = False         # If True, force enclose of
                                                 #+ strcmd with single quotes
         self._b_detach          = False         # If True, detach process from
@@ -95,19 +104,23 @@ class crun(object):
         if self._b_devnull:
             str_suffix       = ">/dev/null 2>&1 "
         else: str_suffix     = ''
-        if self._b_detach:   str_embeddedDetach = "&"
-        else:                str_embeddedDetach = ""
+        if self._b_detach:      str_embeddedDetach      = "&"
+        else:                   str_embeddedDetach      = ""
+        if self._b_sshDetach:   str_sshDetach           = "&"
+        else:                   str_sshDetach           = ""
         str_shellCmd            = '%s %s %s %s' % ( self._str_cmdPrefix,
                                                     str_shellCmd,
                                                     str_suffix,
                                                     str_embeddedDetach)
         if self._b_sshDo and len(self._str_remoteHost):
-           str_shellCmd         = 'ssh -p %s %s@%s  "%s" ' % (
+           str_shellCmd         = 'ssh -p %s %s@%s  "%s" %s' % (
                                                     self._str_remotePort,
                                                     self._str_remoteUser,
                                                     self._str_remoteHost,
-                                                    str_shellCmd)
-        
+                                                    str_shellCmd,
+                                                    str_sshDetach)
+        if self._b_disassociate:
+            str_shellCmd        = "( %s ) &" % str_shellCmd
         ret                     = 0
         if self._b_detach and self._b_schedulerSet: str_shellCmd += " &"
 
@@ -160,13 +173,23 @@ class crun(object):
         if len(args):
             self._b_detach      = args[0]
 
+    def disassociate(self, *args):
+        self._b_disassociate    = True
+        if len(args):
+            self._b_disassociate = args[0]
+
     def devnull(self, *args):
         if len(args):
             self._b_sshDo       = args[0]
         else:
             return self._b_devnull
     
-    def ssh(self, *args):
+    def sshDetach(self, *args):
+        self._b_sshDetach       = True
+        if len(args):
+            self._b_sshDetach   = args[0]
+
+    def sshDo(self, *args):
         self._b_sshDo           = True
         if len(args):
             self._b_sshDo       = args[0]
@@ -405,6 +428,8 @@ class crun_lsf(crun):
         else:
             shellQueue  = crun()
             str_user    = crun('whoami').stdout().strip()
+        shellQueue.echo(False)
+        shellQueue.echoStdOut(False)
         shellQueue('bjobs | grep %s | wc -l ' % str_user)
         str_processInSchedulerCount     = shellQueue.stdout().strip()
         shellQueue("bjobs | grep %s | awk '{print $3}' | grep 'RUN' | wc -l" %\
@@ -413,7 +438,6 @@ class crun_lsf(crun):
         completedCount                  = int(str_processInSchedulerCount) - \
                                           int(str_processRunningCount)
         str_processCompletedCount       = str(completedCount)                                
-        str_processCompletedCount       = shellQueue.stdout().strip()
         return (str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
@@ -509,6 +533,34 @@ class crun_mosix(crun):
         self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
 
+    def email_send(self):
+        '''
+        The MOSIX scheduler doesn't have the capacity to email users when jobs
+        are completed. This method will generate and send an email to the
+        internally class-defined recipient.
+        '''
+        CMail   = C_mail.C_mail()
+
+        str_from        = "PICES"
+        str_subject     = "PICES job status"
+        str_body        = """
+        Dear %s --
+
+        The scheduled batch of jobs you sent to PICES have
+        all completed, and no jobs remain in the scheduler.
+
+        Please consult any relevant output files relating
+        to your job.
+
+        <EOM/NRN>
+        
+        """ % self.emailUser()
+        CMail.mstr_SMTPserver = "johannesburg"
+        CMail.send(     to      = self.emailUser().split(','),
+                        sender  = str_from,
+                        subject = str_subject,
+                        body    = str_body)
+
     def queueInfo(self, **kwargs):
         """
         Returns a tuple:
@@ -516,9 +568,9 @@ class crun_mosix(crun):
              number_of_jobs_scheduled,
              number_of_jobs_completed)
         """
+        
         for key, val in kwargs.iteritems():
             if key == 'blockProcess':   str_blockProcess = val
-        
         if self._b_sshDo and len(self._str_remoteHost):
             shellQueue  = crun( remoteHost=self._str_remoteHost,
                                 remotePort=self._str_remotePort,
@@ -527,15 +579,20 @@ class crun_mosix(crun):
         else:
             shellQueue  = crun()
             str_user    = crun('whoami').stdout().strip()
+        shellQueue.echo(False)
+        shellQueue.echoStdOut(False)
         shellQueue('mosq listall | grep %s | grep %s | wc -l ' % (str_blockProcess, str_user))
         str_processInSchedulerCount     = shellQueue.stdout().strip()
         shellQueue("mosq listall | grep %s | grep %s | grep 'RUN' | wc -l" %\
-                    str_blockProcess, str_user)
+                    (str_blockProcess, str_user))
         str_processRunningCount         = shellQueue.stdout().strip()
+        if not len(str_processInSchedulerCount):        str_processInSchedulerCount     = '0'
+        if not len(str_processRunningCount):            str_processRunningCount         = '0'
         completedCount                  = int(str_processInSchedulerCount) - \
                                           int(str_processRunningCount)
         str_processCompletedCount       = str(completedCount)
         str_processCompletedCount       = shellQueue.stdout().strip()
+        if str_processInSchedulerCount == '0': self.email_send()
         return (str_processRunningCount,
                 str_processInSchedulerCount,
                 str_processCompletedCount)
