@@ -321,6 +321,9 @@ class crun_hpc(crun):
     crun_hpc.queueInfo(...)
     '''
 
+    # class variables
+    c_runCount  = 0
+
     def priority(self, *args):
         if len(args):
             self._priority      = args[0]
@@ -405,6 +408,10 @@ class crun_hpc(crun):
         # to capture the outputs of executed applications.
         self._str_schedulerStdOut       = ''
         self._str_schedulerStdErr       = ''
+        self._b_schedulerSet            = True
+        self._b_scheduleOnHostOnly      = False
+        self._str_scheduleHostOnly      = ''
+
         crun.__init__(self, **kwargs)
 
 
@@ -452,7 +459,9 @@ class crun_hpc_launchpad(crun_hpc):
         self._str_scheduleArgs          = ''
 
     def __call__(self, str_cmd, **kwargs):
-        self.scheduleArgs()
+        if not crun_hpc.c_runCount:
+            self.scheduleArgs()
+            crun_hpc.c_runCount += 1
         return crun.__call__(self, str_cmd, **kwargs)
     
     def scheduleArgs(self, *args):
@@ -521,7 +530,9 @@ class crun_hpc_lsf(crun_hpc):
         self._str_scheduleArgs          = ''
 
     def __call__(self, str_cmd, **kwargs):
-        self.scheduleArgs()
+        if not crun_hpc.c_runCount:
+            self.scheduleArgs()
+            crun_hpc.c_runCount += 1
         return crun.__call__(self, str_cmd, **kwargs)
     
     def scheduleArgs(self, *args):
@@ -591,16 +602,15 @@ class crun_hpc_mosix(crun_hpc):
         self._b_singleQuoteCmd          = False
         self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
         self._str_queue                 = "normal"
-        self._b_schedulerSet            = True
-        self._b_scheduleOnHostOnly      = False
-        self._str_scheduleHostOnly      = ''
 
         self._priority                  = 50
         self._str_scheduleCmd           = 'mosbatch'
         self._str_scheduleArgs          = ''
         
     def __call__(self, str_cmd, **kwargs):
-        self.scheduleArgs()
+        if not crun_hpc.c_runCount:
+            self.scheduleArgs()
+            crun_hpc.c_runCount += 1
         return crun.__call__(self, str_cmd, **kwargs)
 
 
