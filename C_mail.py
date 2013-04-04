@@ -247,8 +247,6 @@ class C_mail :
 	    
 	    self.internals_check()
 
-            print astr_from
-
 	    msg 		= MIMEMultipart()
 	    msg['Subject'] 	= astr_subject
 	    msg['From']		= astr_from
