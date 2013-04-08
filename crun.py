@@ -330,6 +330,12 @@ class crun_hpc(crun):
         else:
             return self._priority
 
+    def queueName(self, *args):
+        if len(args):
+            self._str_queue = args[0]
+        else:
+            return self._str_queue
+
     def jobID(self, *args):
         if len(args):
             self._str_jobID = args[0]
@@ -397,20 +403,44 @@ class crun_hpc(crun):
         else:
             return self._str_schedulerStdErr
 
+    def workingDir(self, *args):
+        if len(args):
+            self._str_workingDir = args[0]
+        else:
+            return self._str_workingDir
 
     def __init__(self, **kwargs):
         '''
         Sets some HPC-generic variables and then calls the base 
         constructor.
         '''
+
+        # Working directory spec. If set, changes behaviour of
+        # scheduleArgs pending cluster specialization
+        self._str_workingDir            = ''
         
         # These define the stdout/stderr that schedulers will often use
         # to capture the outputs of executed applications.
+        self._b_schedulerSet            = True
+
+        # The "name" of the queue to use
+        self._str_queue                 = ''
+
+        # Job ID and related stdout/stderr 
+        self._str_jobID                 = ''
         self._str_schedulerStdOut       = ''
         self._str_schedulerStdErr       = ''
-        self._b_schedulerSet            = True
+
+        # Host subset spec
         self._b_scheduleOnHostOnly      = False
         self._str_scheduleHostOnly      = ''
+
+        self._str_clusterName           = 'undefined'
+        self._str_clusterType           = 'undefined'
+
+        # email spec
+        self._b_emailWhenDone           = False
+        self._str_emailUser             = ''
 
         crun.__init__(self, **kwargs)
 
@@ -419,6 +449,7 @@ class crun_hpc(crun):
         '''
         If called, simply drops through to the base functor
         '''
+        crun_hpc.c_runCount += 1
         return crun.__call__(self, str_cmd, **kwargs)
 
     def queueInfo(self, **kwargs):
@@ -459,15 +490,14 @@ class crun_hpc_launchpad(crun_hpc):
         self._str_scheduleArgs          = ''
 
     def __call__(self, str_cmd, **kwargs):
-        if not crun_hpc.c_runCount:
-            self.scheduleArgs()
-            crun_hpc.c_runCount += 1
+        self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
     
     def scheduleArgs(self, *args):
         if len(args):
             self._str_scheduleArgs      = args[0]
         else:
+            self._str_scheduleArgs      = ''
             if len(self._str_jobID):
                 self._str_scheduleArgs += "-O %s -E %s " % (
                                 self._str_schedulerStdOut,
@@ -480,7 +510,8 @@ class crun_hpc_launchpad(crun_hpc):
     def queueInfo(self, **kwargs):
         """
         Returns a tuple:
-            (number_of_jobs_running, 
+            (number_of_jobs_pending,
+             number_of_jobs_running, 
              number_of_jobs_scheduled, 
              number_of_jobs_completed)
         """
@@ -500,7 +531,11 @@ class crun_hpc_launchpad(crun_hpc):
         shellQueue("qstat | grep %s | awk '{print $5}' | grep 'R' | wc -l" %\
                     str_user)
         str_processRunningCount         = shellQueue.stdout().strip()
-        return (str_processRunningCount, 
+        shellQueue("qstat | grep %s | awk '{print $5}' | grep 'Q' | wc -l" %\
+                    str_user)
+        str_processPendingCount         = shellQueue.stdout().strip()
+        return (str_processPendingCount,
+                str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
 
@@ -509,8 +544,8 @@ class crun_hpc_lsf(crun_hpc):
     def __init__(self, **kwargs):
         crun_hpc.__init__(self, **kwargs)
 
-        self._str_FSdevsource           = '. ~/arch/scripts/nmr-fs  >/dev/null'
-        self._str_FSstablesource        = '. ~/arch/scripts/nmr-fs  >/dev/null'
+        self._str_FSdevsource           = '. ~/arch/scripts/nmr-fs dev  >/dev/null'
+        self._str_FSstablesource        = '. ~/arch/scripts/nmr-fs stable >/dev/null'
 
         self._str_clusterName           = "erisone"
         self._str_clusterType           = "HP-LSF"
@@ -520,7 +555,7 @@ class crun_hpc_lsf(crun_hpc):
 
         self._str_jobID                 = ""
         self._str_jobInfoDir            = "~/lsf/output"
-        self._b_singleQuoteCmd          = False
+        self._b_singleQuoteCmd          = True
         self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
         self._str_queue                 = "normal"
         self._b_schedulerSet            = True
@@ -530,15 +565,20 @@ class crun_hpc_lsf(crun_hpc):
         self._str_scheduleArgs          = ''
 
     def __call__(self, str_cmd, **kwargs):
-        if not crun_hpc.c_runCount:
-            self.scheduleArgs()
-            crun_hpc.c_runCount += 1
+        if len(self._str_workingDir):
+            str_cmd = "cd %s ; %s" % (self._str_workingDir, str_cmd)
+        self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
     
     def scheduleArgs(self, *args):
+        '''
+        If called without any arguments, rebuilds the scheduler arguments
+        from scratch.
+        '''
         if len(args):
             self._str_scheduleArgs      = args[0]
         else:
+            self._str_scheduleArgs      = ''
             if self._b_scheduleOnHostOnly:
                 self._str_scheduleArgs += "-m %s%s%s " % (
                     chr(39), self._str_scheduleHostOnly, chr(39)
@@ -556,7 +596,8 @@ class crun_hpc_lsf(crun_hpc):
     def queueInfo(self, **kwargs):
         """
         Returns a tuple:
-            (number_of_jobs_running, 
+            (number_of_jobs_pending,
+             number_of_jobs_running, 
              number_of_jobs_scheduled, 
              number_of_jobs_completed)
         """
@@ -575,10 +616,15 @@ class crun_hpc_lsf(crun_hpc):
         shellQueue("bjobs | grep %s | awk '{print $3}' | grep 'RUN' | wc -l" %\
                     str_user)
         str_processRunningCount         = shellQueue.stdout().strip()
+        shellQueue("bjobs | grep %s | awk '{print $3}' | grep 'PEND' | wc -l" %\
+                    str_user)
+        str_processPendingCount         = shellQueue.stdout().strip()
         completedCount                  = int(str_processInSchedulerCount) - \
-                                          int(str_processRunningCount)
+                                          int(str_processRunningCount) - \
+                                          int(str_processPendingCount)
         str_processCompletedCount       = str(completedCount)                                
-        return (str_processRunningCount, 
+        return (str_processPendingCount,
+                str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
 
@@ -608,9 +654,10 @@ class crun_hpc_mosix(crun_hpc):
         self._str_scheduleArgs          = ''
         
     def __call__(self, str_cmd, **kwargs):
-        if not crun_hpc.c_runCount:
-            self.scheduleArgs()
-            crun_hpc.c_runCount += 1
+        self.scheduleArgs()
+        if len(self._str_workingDir):
+            self._str_scheduleCmd       = "cd %s ; %s" %\
+                (self._str_workingDir, self._str_scheduleCmd)
         return crun.__call__(self, str_cmd, **kwargs)
 
 
@@ -622,6 +669,7 @@ class crun_hpc_mosix(crun_hpc):
             # ids to be alphanumeric...
             #if len(self._str_jobID):
                 #self._str_scheduleArgs += "-J%s " % self._str_jobID
+            self._str_scheduleArgs      = ''
             self._str_scheduleArgs     += "-q%d " % self._priority
             if self._b_scheduleOnHostOnly:
                 self._str_scheduleArgs += "-r%s " % self._str_scheduleHostOnly
@@ -666,8 +714,9 @@ class crun_hpc_mosix(crun_hpc):
     def queueInfo(self, **kwargs):
         """
         Returns a tuple:
-            (number_of_jobs_running,
-             number_of_jobs_scheduled,
+            (number_of_jobs_pending,
+             number_of_jobs_running, 
+             number_of_jobs_scheduled, 
              number_of_jobs_completed)
         """
         
@@ -688,6 +737,9 @@ class crun_hpc_mosix(crun_hpc):
         shellQueue("mosq listall | grep %s | grep %s | grep 'RUN' | wc -l" %\
                     (str_blockProcess, str_user))
         str_processRunningCount         = shellQueue.stdout().strip()
+        shellQueue("mosq listall | grep %s | grep %s | awk '{print $5}' | grep -v 'RUN' | wc -l" %\
+                    (str_blockProcess, str_user))
+        str_processPendingCount         = shellQueue.stdout().strip()
         if not len(str_processInSchedulerCount):        str_processInSchedulerCount     = '0'
         if not len(str_processRunningCount):            str_processRunningCount         = '0'
         completedCount                  = int(str_processInSchedulerCount) - \
@@ -695,7 +747,8 @@ class crun_hpc_mosix(crun_hpc):
         str_processCompletedCount       = str(completedCount)
         str_processCompletedCount       = shellQueue.stdout().strip()
         if str_processInSchedulerCount == '0': self.email_send()
-        return (str_processRunningCount,
+        return (str_processPendingCount,
+                str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
 
