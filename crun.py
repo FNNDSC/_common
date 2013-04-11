@@ -68,6 +68,56 @@ class crun(object):
         else:
             return self._str_FSversion
 
+    def FSdevsource(self, *args):
+        if len(args):
+            self._str_FSdevsource = args[0]
+        else:
+            return self._str_FSdevsource
+
+    def FSdevsource(self, *args):
+        if len(args):
+            self._str_FSdevsource = args[0]
+        else:
+            return self._str_FSdevsource
+
+    def sourceEnv(self, *args):
+        self._b_sourceEnv       = True
+        if len(args):
+            self._b_sourceEnv   = args[0]
+
+    def sourceEnvCmd(self, *args):
+        if len(args):
+            self._str_sourceEnvCmd = args[0]
+        else:
+            return self._str_sourceEnvCmd
+
+    def FSinit(self, **kwargs):
+        '''
+        Get / set the FS related initialization parameters.
+
+        Returns a dictionary of internal values if called as
+        as getter. This allows for one crun object to be FSinit'd
+        by another:
+
+            crun1.FSinit(**crun2.FSinit())
+
+        will assign <crun1> the FS internals of <crun2>. This assumes,
+        obviously, that <crun2> has been initializes already with
+        appropriate values  FS values.
+        '''
+        numArgs = 0
+        for key, val in kwargs.iteritems():
+            numArgs += 1
+            if key == 'FSversion'       : self._str_FSversion           = val
+            if key == 'FSdevsource'     : self._str_FSdevsource         = val
+            if key == 'FSstablesource'  : self._str_FSstablesource      = val
+        if not numArgs:
+            return {
+                'FSversion'             : self._str_FSversion,
+                'FSdevsource'           : self._str_FSdevsource,
+                'FSstablesource'        : self._str_FSstablesource
+                }
+
     def FSsubjDir(self, **kwargs):
         '''
         This method is responsible for translating FS subject dirs 
@@ -126,7 +176,13 @@ class crun(object):
         self._str_FSdevsource           = ''
         self._str_FSstablesource        = ''
         self._str_FScmd                 = ''
-        
+
+        # Working directory spec. In what directory should the command
+        # be executed? Depending on sub-classing (esp HPC subclassing)
+        # the actual usage of the _str_workingDir might be assigned in
+        # the HPC subclass.
+        self._str_workingDir            = ''
+
         self._b_schedulerSet    = False
         self._b_waitForChild    = False         # Used for spawned processes, forces
                                                 #+ blocking on main processing loop
@@ -139,18 +195,27 @@ class crun(object):
                                                 # its parent shell. Essentially, this
                                                 # wraps the command in parentheses.
 
-        self._b_sshDo           = False
-        self._b_sshDetach       = False         # An additional ssh-only detach
-                                                # that, if true, detaches the 
-                                                # ssh command itself.
-        self._b_singleQuoteCmd  = False         # If True, force enclose of
-                                                #+ strcmd with single quotes
         self._b_detach          = False         # If True, detach process from
                                                 #+ shell
         self._b_echoCmd         = False
         self._b_echoStdOut      = False
         self._b_echoStdErr      = False
         self._b_devnull         = False
+        self._str_stdout        = ""
+        self._str_stderr        = ""
+        self._exitCode          = 0
+
+        # Remote process shells (including HPC scheduler shells)
+        self._b_sourceEnv       = False         # If true, add appropriate cmds
+                                                #+ to source the remote shell's 
+                                                #+ user env scripts
+        self._str_sourceEnvCmd  = '. ~/.bashrc >/dev/null 2>/dev/null ; . ~/.bash_profile   >/dev/null 2>/dev/null '
+        self._b_sshDo           = False
+        self._b_sshDetach       = False         # An additional ssh-only detach
+                                                #+ that, if true, detaches the
+                                                #+ ssh command itself.
+        self._b_singleQuoteCmd  = False         # If True, force enclose of
+                                                #+ strcmd with single quotes
         self._str_remoteHost    = ""
         self._str_remoteUser    = ""
         self._str_remotePasswd  = ""
@@ -158,14 +223,15 @@ class crun(object):
 
         self._str_scheduleCmd   = ""
         self._str_scheduleArgs  = ""
-        self._str_stdout        = ""
-        self._str_stderr        = ""
-        self._exitCode          = 0
 
-        self._str_cmdPrefix     = ""            # Typically used for scheduler and args
-        self._str_cmd           = ""            # Command that is to be executed
-        self._str_cmdSuffix     = ""            # Any suffixes, such as redirects, etc
-        self._str_shellCmd      = ""            # The final cumulative shell command
+        self._str_cmdPrefix     = ""            # Typically used for scheduler 
+                                                #+ and args
+        self._str_cmd           = ""            # Original "pure" command that 
+                                                #+ is to be executed
+        self._str_cmdSuffix     = ""            # Any suffixes, such as redirects, 
+                                                #+ etc for this command.
+        self._str_shellCmd      = ""            # The final cumulative shell 
+                                                #+ cmd that will be executed.
         
         for key, value in kwargs.iteritems():
             if key == "remotePort":     self._str_remotePort    = value
@@ -180,7 +246,23 @@ class crun(object):
         
     
     def __call__(self, str_cmd, **kwargs):
+        '''
+        This "functor" is the heart of the crun object.
+
+        The order of the following statements is critical in building up the
+        correct final command string to be executed, especially as far as
+        the correct quoting of the correct sub-part, the placement (or not)
+        of remote environment sourcing, redirects, changing to working
+        directories, etc.
+        '''
         self._str_cmd           = str_cmd
+
+        # The concept of "workingDir" is hpc-specific for any given command
+        # and needs to set in each hpc functor. Here, it is only set
+        # for cases when no scheduler is specified.
+        if len(self._str_workingDir) and not self._b_schedulerSet:
+            str_cmd = "cd %s ; %s" % (self._str_workingDir, str_cmd)
+
         self._str_cmdPrefix     = self._str_scheduleCmd + " " + \
                                   self._str_scheduleArgs
         if self._b_singleQuoteCmd:
@@ -196,8 +278,11 @@ class crun(object):
         else:                   str_sshDetach           = ""
         if self._b_FreeSurferUse:
             self._str_shellCmd = self.FS_cmd(self._str_shellCmd)
-        self._str_shellCmd      = '%s %s' % ( self._str_shellCmd,
-                                                    str_embeddedDetach)
+        if self._b_sourceEnv:
+            self._str_shellCmd  = "%s ; %s" % ( self._str_sourceEnvCmd,
+                                                self._str_shellCmd)
+        self._str_shellCmd      = '%s %s' % (   self._str_shellCmd,
+                                                str_embeddedDetach)
         if self._b_sshDo and len(self._str_remoteHost):
            self._str_shellCmd   = 'ssh -p %s %s@%s  "%s" %s' % (
                                                     self._str_remotePort,
@@ -302,6 +387,12 @@ class crun(object):
         if len(args):
             self._b_runCmd      = args[0]
 
+    def workingDir(self, *args):
+        if len(args):
+            self._str_workingDir = args[0]
+        else:
+            return self._str_workingDir
+
     def remoteLogin_set(self, str_remoteUser, str_remoteHost, **kwargs):
         self.sshDo()
         for key, value in kwargs.iteritems():
@@ -403,40 +494,28 @@ class crun_hpc(crun):
         else:
             return self._str_schedulerStdErr
 
-    def workingDir(self, *args):
-        if len(args):
-            self._str_workingDir = args[0]
-        else:
-            return self._str_workingDir
-
     def __init__(self, **kwargs):
         '''
         Sets some HPC-generic variables and then calls the base 
         constructor.
         '''
-
-        # Working directory spec. If set, changes behaviour of
-        # scheduleArgs pending cluster specialization
-        self._str_workingDir            = ''
-        
-        # These define the stdout/stderr that schedulers will often use
-        # to capture the outputs of executed applications.
         self._b_schedulerSet            = True
+        self._str_clusterName           = 'undefined'
+        self._str_clusterType           = 'undefined'
 
         # The "name" of the queue to use
         self._str_queue                 = ''
 
         # Job ID and related stdout/stderr 
         self._str_jobID                 = ''
+        # These define the stdout/stderr that schedulers will often use
+        # to capture the outputs of executed applications.
         self._str_schedulerStdOut       = ''
         self._str_schedulerStdErr       = ''
 
         # Host subset spec
         self._b_scheduleOnHostOnly      = False
         self._str_scheduleHostOnly      = ''
-
-        self._str_clusterName           = 'undefined'
-        self._str_clusterType           = 'undefined'
 
         # email spec
         self._b_emailWhenDone           = False
@@ -483,7 +562,6 @@ class crun_hpc_launchpad(crun_hpc):
             self._str_jobInfoDir    = "/pbs/%s" % self._str_emailUser
         self._b_singleQuoteCmd          = True
         self._str_queue                 = "max200"
-        self._b_schedulerSet            = True
 
         self._priority                  = 50
         self._str_scheduleCmd           = 'pbsubmit'
@@ -558,7 +636,6 @@ class crun_hpc_lsf(crun_hpc):
         self._b_singleQuoteCmd          = True
         self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
         self._str_queue                 = "normal"
-        self._b_schedulerSet            = True
 
         self._priority                  = 50
         self._str_scheduleCmd           = 'bsub'
