@@ -152,9 +152,11 @@ class crun(object):
         '''
         self._str_FScmd = "(cd %s ; " % self._str_FSsubjDir
         if self._str_FSversion  == 'dev':
-            self._str_FScmd += self._str_FSdevsource + "; "
+            if len(self._str_FSdevsource):
+                self._str_FScmd += self._str_FSdevsource + "; "
         else:
-            self._str_FScmd += self._str_FSstablesource + "; "
+            if len(self._str_FSstablesource):
+                self._str_FScmd += self._str_FSstablesource + "; "
         self._str_FScmd += astr_cmd + ")"
         return self._str_FScmd
 
@@ -173,8 +175,8 @@ class crun(object):
         self._b_FreeSurferUse           = False
         self._str_FSversion             ='dev'
         self._str_FSsubjDir             = ''
-        self._str_FSdevsource           = ''
-        self._str_FSstablesource        = ''
+        self._str_FSdevsource           = '. ~/arch/scripts/chb-fs dev >/dev/null'
+        self._str_FSstablesource        = '. ~/arch/scripts/chb-fs stable >/dev/null'
         self._str_FScmd                 = ''
 
         # Working directory spec. In what directory should the command
@@ -393,6 +395,18 @@ class crun(object):
         else:
             return self._str_workingDir
 
+    def emailUser(self, *args):
+        if len(args):
+            self._str_emailUser = args[0]
+        else:
+            return self._str_emailUser
+
+    def emailWhenDone(self, *args):
+        if len(args):
+            self._b_emailWhenDone = args[0]
+        else:
+            return self._b_emailWhenDone
+
     def remoteLogin_set(self, str_remoteUser, str_remoteHost, **kwargs):
         self.sshDo()
         for key, value in kwargs.iteritems():
@@ -452,18 +466,6 @@ class crun_hpc(crun):
         else:
             return self._str_maxQueue
 
-    def emailUser(self, *args):
-        if len(args):
-            self._str_emailUser = args[0]
-        else:
-            return self._str_emailUser
-
-    def emailWhenDone(self, *args):
-        if len(args):
-            self._b_emailWhenDone = args[0]
-        else:
-            return self._b_emailWhenDone
-
     def clusterName(self, *args):
         if len(args):
             self._str_clusterName = args[0]
@@ -496,9 +498,10 @@ class crun_hpc(crun):
 
     def __init__(self, **kwargs):
         '''
-        Sets some HPC-generic variables and then calls the base 
-        constructor.
+        Calls the base constructor and then sets some HPC-specific data.
         '''
+        crun.__init__(self, **kwargs)
+
         self._b_schedulerSet            = True
         self._str_clusterName           = 'undefined'
         self._str_clusterType           = 'undefined'
@@ -520,8 +523,6 @@ class crun_hpc(crun):
         # email spec
         self._b_emailWhenDone           = False
         self._str_emailUser             = ''
-
-        crun.__init__(self, **kwargs)
 
 
     def __call__(self, str_cmd, **kwargs):
@@ -564,11 +565,15 @@ class crun_hpc_launchpad(crun_hpc):
         self._str_queue                 = "max200"
 
         self._priority                  = 50
-        self._str_scheduleCmd           = 'pbsubmit'
+        self._str_scheduler             = 'pbsubmit'
+        self._str_scheduleCmd           = ''
         self._str_scheduleArgs          = ''
 
     def __call__(self, str_cmd, **kwargs):
         self.scheduleArgs()
+        if len(self._str_workingDir):
+            str_cmd = "cd %s ; %s" % (self._str_workingDir, str_cmd)
+        self._str_scheduleCmd       = self._str_scheduler
         return crun.__call__(self, str_cmd, **kwargs)
     
     def scheduleArgs(self, *args):
@@ -635,15 +640,17 @@ class crun_hpc_lsf(crun_hpc):
         self._str_jobInfoDir            = "~/lsf/output"
         self._b_singleQuoteCmd          = True
         self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
-        self._str_queue                 = "normal"
+        self._str_queue                 = "long"
 
         self._priority                  = 50
-        self._str_scheduleCmd           = 'bsub'
+        self._str_scheduler             = 'bsub'
+        self._str_scheduleCmd           = ''
         self._str_scheduleArgs          = ''
 
     def __call__(self, str_cmd, **kwargs):
         if len(self._str_workingDir):
             str_cmd = "cd %s ; %s" % (self._str_workingDir, str_cmd)
+        self._str_scheduleCmd           = self._str_scheduler
         self.scheduleArgs()
         return crun.__call__(self, str_cmd, **kwargs)
     
@@ -727,14 +734,17 @@ class crun_hpc_mosix(crun_hpc):
         self._str_queue                 = "normal"
 
         self._priority                  = 50
-        self._str_scheduleCmd           = 'mosbatch'
+        self._str_scheduler             = 'mosbatch'
+        self._str_scheduleCmd           = ''
         self._str_scheduleArgs          = ''
         
     def __call__(self, str_cmd, **kwargs):
         self.scheduleArgs()
         if len(self._str_workingDir):
             self._str_scheduleCmd       = "cd %s ; %s" %\
-                (self._str_workingDir, self._str_scheduleCmd)
+                (self._str_workingDir, self._str_scheduler)
+        else:
+            self._str_scheduleCmd       = self._str_scheduler
         return crun.__call__(self, str_cmd, **kwargs)
 
 
@@ -752,6 +762,8 @@ class crun_hpc_mosix(crun_hpc):
                 self._str_scheduleArgs += "-r%s " % self._str_scheduleHostOnly
             else:
                 self._str_scheduleArgs += "-b "
+            if len(self._str_schedulerStdOut) or len(self._str_schedulerStdErr):
+                self._str_cmdSuffix = ''
             if len(self._str_schedulerStdOut):
                 self._str_cmdSuffix += " >%s " % self._str_schedulerStdOut
             if len(self._str_schedulerStdErr):
