@@ -640,7 +640,7 @@ class crun_hpc_lsf(crun_hpc):
         self._str_jobInfoDir            = "~/lsf/output"
         self._b_singleQuoteCmd          = True
         self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
-        self._str_queue                 = "defaultlow"
+        self._str_queue                 = "normal"
 
         self._priority                  = 50
         self._str_scheduler             = 'bsub'
