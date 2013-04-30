@@ -55,6 +55,15 @@ class crun(object):
             'error'         : 'no handler for this cluster type has been derived.',
             'exitCode'      : 10},
     }
+
+    def description(self, *args):
+        '''
+        Get / set internal object description.
+        '''
+        if len(args):
+            self._str_desc = args[0]
+        else:
+            return self._str_desc
     
     def FreeSurferUse(self, *args):
         if len(args):
@@ -162,6 +171,11 @@ class crun(object):
 
         
     def __init__(self, **kwargs):
+
+        #
+        # Object desc block
+        #
+        str_desc                        = ''
 
         # FreeSurfer block. If "True", then each crun command will
         # be prefixed by a call to source the appropriate environment
@@ -782,18 +796,29 @@ class crun_hpc_mosix(crun_hpc):
 
         str_from        = "PICES"
         str_subject     = "PICES job status"
+        str_desc        = ''
+        if len(self._str_desc):
+            str_desc    = '''
+
+        This batch of jobs has the following internal description:
+
+        <--%s-->
+
+        ''' % self._str_desc
         str_body        = """
         Dear %s --
 
         The scheduled batch of jobs you sent to PICES have
         all completed, and no jobs remain in the scheduler.
 
+        %s
+
         Please consult any relevant output files relating
         to your job.
 
         <EOM/NRN>
         
-        """ % self.emailUser()
+        """ % (self.emailUser(), str_desc)
         CMail.mstr_SMTPserver = "johannesburg"
         CMail.send(     to      = self.emailUser().split(','),
                         sender  = str_from,
