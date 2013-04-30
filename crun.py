@@ -717,6 +717,9 @@ class crun_hpc_lsf(crun_hpc):
         shellQueue("bjobs | grep %s | awk '{print $3}' | grep 'PEND' | wc -l" %\
                     str_user)
         str_processPendingCount         = shellQueue.stdout().strip()
+        if not len(str_processInSchedulerCount):        str_processInSchedulerCount     = '0'
+        if not len(str_processRunningCount):            str_processRunningCount         = '0'
+        if not len(str_processPendingCount):            str_processPendingCount		= '0'
         completedCount                  = int(str_processInSchedulerCount) - \
                                           int(str_processRunningCount) - \
                                           int(str_processPendingCount)
