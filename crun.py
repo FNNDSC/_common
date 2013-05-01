@@ -175,7 +175,7 @@ class crun(object):
         #
         # Object desc block
         #
-        str_desc                        = ''
+        self._str_desc                  = ''
 
         # FreeSurfer block. If "True", then each crun command will
         # be prefixed by a call to source the appropriate environment
