@@ -709,13 +709,11 @@ class crun_hpc_lsf(crun_hpc):
             str_user    = crun('whoami').stdout().strip()
         shellQueue.echo(False)
         shellQueue.echoStdOut(False)
-        shellQueue('bjobs | grep %s | wc -l ' % str_user)
+        shellQueue('bjobs | grep -v USER | wc -l ')
         str_processInSchedulerCount     = shellQueue.stdout().strip()
-        shellQueue("bjobs | grep %s | awk '{print $3}' | grep 'RUN' | wc -l" %\
-                    str_user)
+        shellQueue("bjobs | grep -v USER | awk '{print $3}' | grep 'RUN' | wc -l")
         str_processRunningCount         = shellQueue.stdout().strip()
-        shellQueue("bjobs | grep %s | awk '{print $3}' | grep 'PEND' | wc -l" %\
-                    str_user)
+        shellQueue("bjobs | grep -v USER | awk '{print $3}' | grep 'PEND' | wc -l")
         str_processPendingCount         = shellQueue.stdout().strip()
         if not len(str_processInSchedulerCount):        str_processInSchedulerCount     = '0'
         if not len(str_processRunningCount):            str_processRunningCount         = '0'
@@ -728,6 +726,31 @@ class crun_hpc_lsf(crun_hpc):
                 str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
+
+class crun_hpc_lsf_crit(crun_hpc_lsf):
+
+    def __init__(self, **kwargs):
+        crun_hpc_lsf.__init__(self, **kwargs)
+
+        self._str_FSdevsource           = '. ~/arch/scripts/chb-fs dev centos >/dev/null'
+        self._str_FSstablesource        = '. ~/arch/scripts/chb-fs stable >/dev/null'
+
+        self._str_clusterName           = "HP-crit"
+        self._str_clusterType           = "HP-LSF"
+        self._str_clusterScheduler      = 'bsub'
+
+        self._b_emailWhenDone           = False
+
+        self._str_jobID                 = ""
+        self._str_jobInfoDir            = "~/lsf/output"
+        self._b_singleQuoteCmd          = True
+        self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
+        self._str_queue                 = "high_priority"
+
+        self._priority                  = 50
+        self._str_scheduler             = 'bsub'
+        self._str_scheduleCmd           = ''
+        self._str_scheduleArgs          = ''
 
         
 class crun_hpc_mosix(crun_hpc):
@@ -868,6 +891,29 @@ class crun_hpc_mosix(crun_hpc):
                 str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
+
+class crun_hpc_mosix_HPtest(crun_hpc_mosix):
+
+    def __init__(self, **kwargs):
+        crun_hpc_mosix.__init__(self, **kwargs)
+
+        self._str_FSdevsource           = '. ~/arch/scripts/chb-fs dev >/dev/null'
+        self._str_FSstablesource        = '. ~/arch/scripts/chb-fs stable >/dev/null'
+
+        self._str_clusterName           = "HPtest"
+
+        self._b_emailWhenDone           = False
+
+        self._str_jobID                 = ""
+        self._str_jobInfoDir            = "~/tmp"
+        self._b_singleQuoteCmd          = False
+        self._str_emailUser             = "rudolph.pienaar@childrens.harvard.edu"
+        self._str_queue                 = "normal"
+
+        self._priority                  = 50
+        self._str_scheduler             = 'mosbatch'
+        self._str_scheduleCmd           = ''
+        self._str_scheduleArgs          = ''
 
 
 class crun_mosixbash(crun):
