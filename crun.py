@@ -684,7 +684,7 @@ class crun_hpc_lsf(crun_hpc):
             if self._b_emailWhenDone and len(self._str_emailUser):
                 self._str_scheduleArgs += "-u %s -N " % self._str_emailUser
             if len(self._str_jobID):
-                self._str_scheduleArgs += "-J %s " % self._str_jobID
+                self._str_scheduleArgs += "-S 20000 -J %s " % self._str_jobID
                 self._str_scheduleArgs += "-o %s -e %s " % (
                                 self._str_schedulerStdOut,
                                 self._str_schedulerStdErr)
