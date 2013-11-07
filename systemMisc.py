@@ -1100,13 +1100,18 @@ def file_exists(astr_fileName):
     except IOError:
         return False
 
-def file_writeOnce(astr_fileName, astr_val):
+def file_writeOnce(astr_fileName, astr_val, **kwargs):
     '''
     Simple "one-shot" writer. Opens <astr_fileName>
     and saves <astr_val> to file, then closes
     file.
     '''
-    FILE = open(astr_fileName, 'w')
+    
+    _str_mode = 'w'
+    for key, val in kwargs.iteritems():
+        if key == 'mode':   _str_mode   = val
+    
+    FILE = open(astr_fileName, _str_mode)
     FILE.write(astr_val)
     FILE.close()
         
