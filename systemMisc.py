@@ -1070,6 +1070,13 @@ def mkdir(newdir, mode=0775):
             #print "chmod %d %s" % (mode, newdir)
             #os.chmod(newdir, mode)
 
+def touch(fname, times=None):
+    '''
+    Emulates the UNIX touch command.
+    '''
+    with file(fname, 'a'):
+        os.utime(fname, times)
+
 # From stackoverflow, answered Sep 25 '08 at 21:43 by S.Lott
 # http://stackoverflow.com/questions/136168/get-last-n-lines-of-a-file-with-python-similar-to-tail
 def tail( f, window=20 ):
