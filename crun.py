@@ -54,6 +54,10 @@ class crun(object):
             'action'        : 'trying to access the scheduler queue, ',
             'error'         : 'no handler for this cluster type has been derived.',
             'exitCode'      : 10},
+        'emailFail'   : {
+            'action'        : 'attempting to send notification email, ',
+            'error'         : 'sending failed. Perhaps host is not email configured?',
+            'exitCode'      : 20},
     }
 
     def description(self, *args):
@@ -309,7 +313,6 @@ class crun(object):
         if self._b_disassociate:
             self._str_shellCmd  = "( %s ) &" % self._str_shellCmd
         ret                     = 0
-        if self._b_detach and self._b_schedulerSet: self._str_shellCmd += " &"
 
         if self._b_echoCmd: sys.stdout.write('%s\n' % self._str_shellCmd)
         if self._b_runCmd:
@@ -891,7 +894,11 @@ class crun_hpc_mosix(crun_hpc):
                                           int(str_processRunningCount)
         str_processCompletedCount       = str(completedCount)
         str_processCompletedCount       = shellQueue.stdout().strip()
-        if str_processInSchedulerCount == '0': self.email_send()
+        if str_processInSchedulerCount == '0': 
+            try:
+                self.email_send()
+            except:
+                pass
         return (str_processPendingCount,
                 str_processRunningCount, 
                 str_processInSchedulerCount,
