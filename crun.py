@@ -339,6 +339,12 @@ class crun(object):
         else:
             return self._str_cmdPrefix
 
+    def cmd(self, *args):
+        if len(args):
+            self._str_shellCmd     = args[0]
+        else:
+            return self._str_shellCmd
+
     def scheduleCmd(self, *args):
         if len(args):
             self._str_scheduleCmd = args[0]
