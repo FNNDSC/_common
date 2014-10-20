@@ -20,6 +20,7 @@ import os
 import sys
 import getpass
 import socket
+import argparse 
 
 # FNNDSC imports
 import systemMisc as misc
@@ -238,6 +239,7 @@ class crun(object):
                                                 #+ strcmd with single quotes
         self._str_remoteHost    = ""
         self._str_remoteUser    = ""
+        self._str_remoteUserIdentity = ""
         self._str_remotePasswd  = ""
         self._str_remotePort    = "22"
 
@@ -262,7 +264,7 @@ class crun(object):
                 if len(l_remoteHost) == 2:
                     self._str_remotePort = l_remoteHost[1]
             if key == "remoteUser":     self._str_remoteUser    = value
-            if key == "remotePasswd":   self._str_remotePasswd  = value
+            if key == "remoteUserIdentity":   self._str_remoteUserIdentity = value
         
     
     def __call__(self, str_cmd, **kwargs):
@@ -304,18 +306,32 @@ class crun(object):
         self._str_shellCmd      = '%s %s' % (   self._str_shellCmd,
                                                 str_embeddedDetach)
         if self._b_sshDo and len(self._str_remoteHost):
-           self._str_shellCmd   = 'ssh -p %s %s@%s  "%s" %s' % (
-                                                    self._str_remotePort,
-                                                    self._str_remoteUser,
-                                                    self._str_remoteHost,
-                                                    self._str_shellCmd,
-                                                    str_sshDetach)
+           if not self._str_remoteUserIdentity:
+               self._str_shellCmd   = 'ssh -p %s -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no %s@%s  "%s" %s' % (
+                   self._str_remotePort,
+                   self._str_remoteUser,
+                   self._str_remoteHost,
+                   self._str_shellCmd,
+                   str_sshDetach)
+           else:
+               str_idhandle = ""
+               if len(self._str_remoteUserIdentity):
+                   str_idhandle = "-i %s" % self._str_remoteUserIdentity
+               self._str_shellCmd   = 'ssh -p %s %s -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no %s@%s  "%s" %s' % (
+                   self._str_remotePort,
+                   self._str_idhandle,
+                   self._str_remoteUser,
+                   self._str_remoteHost,
+                   self._str_shellCmd,
+                   str_sshDetach)
+
         if self._b_disassociate:
             self._str_shellCmd  = "( %s ) &" % self._str_shellCmd
         ret                     = 0
 
         if self._b_echoCmd: sys.stdout.write('%s\n' % self._str_shellCmd)
         if self._b_runCmd:
+            kwargs['waitForChild'] = self._b_waitForChild
             self._str_stdout, self._str_stderr, self._exitCode    = \
                     misc.shell(self._str_shellCmd, **kwargs)
         if self._b_echoStdOut: 
@@ -339,12 +355,6 @@ class crun(object):
         else:
             return self._str_cmdPrefix
 
-    def cmd(self, *args):
-        if len(args):
-            self._str_shellCmd     = args[0]
-        else:
-            return self._str_shellCmd
-
     def scheduleCmd(self, *args):
         if len(args):
             self._str_scheduleCmd = args[0]
@@ -361,6 +371,12 @@ class crun(object):
         self._b_waitForChild            = True
         if len(args):
             self._b_waitForChild        = args[0]
+
+    def cmd(self, *args):
+        if len(args):
+            self._str_shellCmd = args[0]
+        else:
+            return self._str_shellCmd
 
     def echo(self, *args):
         self._b_echoCmd         = True
@@ -441,7 +457,7 @@ class crun(object):
             if key == 'remoteUser':     self._str_remoteUser    = value
             if key == 'remoteHost':     self._str_remoteHost    = value
             if key == 'remotePort':     self._str_remotePort    = value
-            if key == "passwd":         self._str_remotePasswd  = value
+            if key == "remoteUserIdentity": self._str_remoteUserIdentity  = value
 
 class crun_hpc(crun):
     '''
@@ -552,6 +568,11 @@ class crun_hpc(crun):
         self._b_emailWhenDone           = False
         self._str_emailUser             = ''
 
+        for key, value in kwargs.iteritems():
+            if key == "remoteStdOut":  self._str_schedulerStdOut  = value
+            if key == "remoteStdErr":  self._str_schedulerStdErr  = value
+            if key == "emailUser":   self._str_emailUser = value
+
 
     def __call__(self, str_cmd, **kwargs):
         '''
@@ -597,6 +618,11 @@ class crun_hpc_launchpad(crun_hpc):
         self._str_scheduleCmd           = ''
         self._str_scheduleArgs          = ''
 
+        #configuration
+        self._b_detach = False
+        self._b_disassociate = False
+        self._b_waitForChild = True
+
     def __call__(self, str_cmd, **kwargs):
         self.scheduleArgs()
         if len(self._str_workingDir):
@@ -629,7 +655,8 @@ class crun_hpc_launchpad(crun_hpc):
         if self._b_sshDo and len(self._str_remoteHost):
             shellQueue  = crun( remoteHost=self._str_remoteHost,
                                 remotePort=self._str_remotePort,
-                                remoteUser=self._str_remoteUser)
+                                remoteUser=self._str_remoteUser,
+                                remoteUserIdentity = self._str_remoteUserIdentity)
             str_user    = self._str_remoteUser
         else:
             shellQueue  = crun()
@@ -649,6 +676,174 @@ class crun_hpc_launchpad(crun_hpc):
                 str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
+
+
+class crun_hpc_slurm(crun_hpc):
+
+    def __init__(self, **kwargs):
+        crun_hpc.__init__(self, **kwargs)
+
+        self._str_clusterName           = "slurm"
+        self._str_clusterType           = "slurm"
+        self._str_clusterScheduler      = 'srun'
+
+        self._b_emailWhenDone           = False
+
+        self._str_jobID                 = ""
+        if len(self._str_remoteUser):
+            self._str_jobInfoDir        = "/nobackup1/%s" % self._str_remoteUser
+        else:
+            self._str_jobInfoDir        = "/nobackup1/%s"  % self._str_emailUser
+        self._str_jobInfoDir            = self._str_jobInfoDir + '/jobInfoDir'
+        self._b_singleQuoteCmd          = False
+        self._str_queue                 = "sched_any_quicktest"
+
+        self._priority                  = 50
+        self._str_scheduler             = 'module load slurm ; srun'
+        self._str_scheduleCmd           = ''
+        self._str_scheduleArgs          = ''
+
+        #configuration
+        self.detach(False)             # child &
+        self.sshDetach(True)           # ssh .... &
+        self.waitForChild(False)       # block on child
+
+    def __call__(self, str_cmd, **kwargs):
+        self.scheduleArgs()
+        if len(self._str_workingDir):
+            str_cmd = "cd %s ; %s" % (self._str_workingDir, str_cmd)
+        self._str_scheduleCmd       = self._str_scheduler
+        return crun.__call__(self, str_cmd, **kwargs)
+    
+    def scheduleArgs(self, *args):
+        if len(args):
+            self._str_scheduleArgs      = args[0]
+        else:
+            self._str_scheduleArgs      = ''
+            if len(self._str_jobID):
+                self._str_scheduleArgs += "-o %s -e %s " % (
+                                self._str_schedulerStdOut,
+                                self._str_schedulerStdErr)
+            if self._b_emailWhenDone and len(self._str_emailUser):
+                self._str_scheduleArgs += "--mail-user=%s " % self._str_emailUser
+            self._str_scheduleArgs     += "-p %s " % self._str_queue
+        return self._str_scheduleArgs
+
+    def queueInfo(self, **kwargs):
+        """
+        Returns a tuple:
+            (number_of_jobs_pending,
+             number_of_jobs_running, 
+             number_of_jobs_scheduled, 
+             number_of_jobs_completed)
+        """
+        if self._b_sshDo and len(self._str_remoteHost):
+            shellQueue  = crun( remoteHost=self._str_remoteHost,
+                                remotePort=self._str_remotePort,
+                                remoteUser=self._str_remoteUser,
+                                remoteUserIdentity = self._str_remoteUserIdentity)
+            str_user    = self._str_remoteUser
+        else:
+            shellQueue  = crun()
+            str_user    = crun('whoami').stdout().strip()
+        shellQueue('squeue | grep %s | wc -l ' % str_user)
+        str_processInSchedulerCount     = shellQueue.stdout().strip()
+        shellQueue("squeue | grep %s | awk '{print $5}' | grep 'C' | wc -l" %\
+                    str_user)
+        str_processCompletedCount       = shellQueue.stdout().strip()
+        shellQueue("squeue | grep %s | awk '{print $5}' | grep 'R' | wc -l" %\
+                    str_user)
+        str_processRunningCount         = shellQueue.stdout().strip()
+        shellQueue("squeue | grep %s | awk '{print $5}' | grep 'Q' | wc -l" %\
+                    str_user)
+        str_processPendingCount         = shellQueue.stdout().strip()
+        return (str_processPendingCount,
+                str_processRunningCount, 
+                str_processInSchedulerCount,
+                str_processCompletedCount)
+
+
+class crun_hpc_chpc(crun_hpc):
+
+    def __init__(self, **kwargs):
+        crun_hpc.__init__(self, **kwargs)
+
+        self._str_clusterName           = "chpc"
+        self._str_clusterType           = "torque-based"
+        self._str_clusterScheduler      = 'qsub'
+
+        self._b_emailWhenDone           = False
+
+        self._str_emailUser             = "rudolph"
+        self._str_jobID                 = ""
+        self._str_jobInfoDir            = "~/scratch"
+        self._b_singleQuoteCmd          = True
+        self._str_queue                 = "workq"
+
+        self._priority                  = 50
+        self._str_scheduler             = 'qsub'
+        self._str_scheduleCmd           = ''
+        self._str_scheduleArgs          = ''
+
+        #configuration
+        self._b_detach = False
+        self._b_disassociate = False
+        self._b_waitForChild = True
+
+    def __call__(self, str_cmd, **kwargs):
+        self.scheduleArgs()
+        if len(self._str_workingDir):
+            str_cmd = "cd %s ; %s" % (self._str_workingDir, str_cmd)
+        self._str_scheduleCmd       = self._str_scheduler
+        return crun.__call__(self, str_cmd, **kwargs)
+    
+    def scheduleArgs(self, *args):
+        if len(args):
+            self._str_scheduleArgs      = args[0]
+        else:
+            self._str_scheduleArgs      = ''
+            if len(self._str_jobID):
+                self._str_scheduleArgs += "-O %s -E %s " % (
+                                self._str_schedulerStdOut,
+                                self._str_schedulerStdErr)
+            if self._b_emailWhenDone and len(self._str_emailUser):
+                self._str_scheduleArgs += "-m %s " % self._str_emailUser
+            self._str_scheduleArgs     += "-q %s -c " % self._str_queue
+        return self._str_scheduleArgs
+
+    def queueInfo(self, **kwargs):
+        """
+        Returns a tuple:
+            (number_of_jobs_pending,
+             number_of_jobs_running, 
+             number_of_jobs_scheduled, 
+             number_of_jobs_completed)
+        """
+        if self._b_sshDo and len(self._str_remoteHost):
+            shellQueue  = crun( remoteHost=self._str_remoteHost,
+                                remotePort=self._str_remotePort,
+                                remoteUser=self._str_remoteUser,
+                                remoteUserIdentity = self._str_remoteUserIdentity)
+            str_user    = self._str_remoteUser
+        else:
+            shellQueue  = crun()
+            str_user    = crun('whoami').stdout().strip()
+        shellQueue('qstat | grep %s | wc -l ' % str_user)
+        str_processInSchedulerCount     = shellQueue.stdout().strip()
+        shellQueue("qstat | grep %s | awk '{print $5}' | grep 'C' | wc -l" %\
+                    str_user)
+        str_processCompletedCount       = shellQueue.stdout().strip()
+        shellQueue("qstat | grep %s | awk '{print $5}' | grep 'R' | wc -l" %\
+                    str_user)
+        str_processRunningCount         = shellQueue.stdout().strip()
+        shellQueue("qstat | grep %s | awk '{print $5}' | grep 'Q' | wc -l" %\
+                    str_user)
+        str_processPendingCount         = shellQueue.stdout().strip()
+        return (str_processPendingCount,
+                str_processRunningCount, 
+                str_processInSchedulerCount,
+                str_processCompletedCount)
+
 
 class crun_hpc_lsf(crun_hpc):
 
@@ -674,6 +869,11 @@ class crun_hpc_lsf(crun_hpc):
         self._str_scheduler             = 'bsub'
         self._str_scheduleCmd           = ''
         self._str_scheduleArgs          = ''
+
+        #configuration
+        self._b_detach = False
+        self._b_disassociate = False
+        self._b_waitForChild = True
 
     def __call__(self, str_cmd, **kwargs):
         if len(self._str_workingDir):
@@ -716,7 +916,8 @@ class crun_hpc_lsf(crun_hpc):
         if self._b_sshDo and len(self._str_remoteHost):
             shellQueue  = crun( remoteHost=self._str_remoteHost,
                                 remotePort=self._str_remotePort,
-                                remoteUser=self._str_remoteUser)
+                                remoteUser=self._str_remoteUser,
+                                remoteUserIdentity = self._str_remoteUserIdentity)
             str_user    = self._str_remoteUser
         else:
             shellQueue  = crun()
@@ -740,6 +941,7 @@ class crun_hpc_lsf(crun_hpc):
                 str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
+
 
 class crun_hpc_lsf_crit(crun_hpc_lsf):
 
@@ -791,6 +993,11 @@ class crun_hpc_mosix(crun_hpc):
         self._str_scheduler             = 'mosbatch'
         self._str_scheduleCmd           = ''
         self._str_scheduleArgs          = ''
+
+        #configuration
+        self._b_detach = True
+        self._b_disassociate = True
+        self._b_waitForChild = False
         
     def __call__(self, str_cmd, **kwargs):
         self.scheduleArgs()
@@ -879,7 +1086,8 @@ class crun_hpc_mosix(crun_hpc):
         if self._b_sshDo and len(self._str_remoteHost):
             shellQueue  = crun( remoteHost=self._str_remoteHost,
                                 remotePort=self._str_remotePort,
-                                remoteUser=self._str_remoteUser)
+                                remoteUser=self._str_remoteUser,
+                                remoteUserIdentity = self._str_remoteUserIdentity)
             str_user    = self._str_remoteUser
         else:
             shellQueue  = crun()
@@ -909,6 +1117,7 @@ class crun_hpc_mosix(crun_hpc):
                 str_processRunningCount, 
                 str_processInSchedulerCount,
                 str_processCompletedCount)
+    
 
 class crun_hpc_mosix_HPtest(crun_hpc_mosix):
 
@@ -948,26 +1157,91 @@ class crun_mosixbash(crun):
 
 if __name__ == '__main__':
 
-    # Create the crun instance
-    #shell       = crun()
-    #shell       = crun_hpc_mosix(remoteUser="rudolphpienaar", remoteHost="rc-twice")
-    shell       = crun(remoteUser="rudolphpienaar", remoteHost="rc-drno")
+    from random import randint
 
-    # Grab the command line args defining the app and args that need to be 
-    # scheduled
-    str_cmd     = ""
-    for arg in sys.argv[1:len(sys.argv)]:
-        str_cmd = str_cmd + " " + arg
+    parser = argparse.ArgumentParser(description="crun is functor family of scripts for running \
+                                     command line apps on a cluster.")
+    parser.add_argument("-u", "--user", help="remote user")
+    parser.add_argument("--host", help="connection host")
+    parser.add_argument("-s", "--scheduler", help="cluster scheduler type: \
+        launchpad, slurm, chpc, lsf, lsf_crit \
+        mosix, mosix_HPtest, mosixbash")
+    parser.add_argument("command", help="command to be executed")
+    parser.add_argument("-o", "--out", help="remote standard output file")
+    parser.add_argument("-e", "--err", help="remote standard error file")
+    parser.add_argument("-m", "--mail", help="user mail")
+
+    parser.add_argument("--waitForChild", help="wait for child process", dest='waitForChild', action='store_true', default=False)
+    parser.add_argument("--no-waitForChild", help="don't wait for child process", dest='waitForChild', action='store_false')
+    parser.add_argument("--echo", help="echo cmd", dest='echo', action='store_true', default=False)
+    parser.add_argument("--no-echo", help="don't echo cmd", dest='echo', action='store_false')
+    parser.add_argument("--echoStdOut", help="echo child stdout", dest='echoStdOut', action='store_true', default=False)
+    parser.add_argument("--no-echoStdOut", help="don't echo child stdout", dest='echoStdOut', action='store_false')
+    parser.add_argument("--detach", help="detach child", dest='detach', action='store_true', default=False)
+    parser.add_argument("--no-detach", help="don't detach child", dest='detach', action='store_false')
+    parser.add_argument("--sshDetach", help="detach ssh", dest='sshDetach', action='store_true', default=False)
+    parser.add_argument("--no-sshDetach", help="don't detach ssh", dest='sshDdetach', action='store_false')
+
+    parser.add_argument("--printElapsedTime", help="print elapsed time", dest='printElapsedTime', action='store_true', default=False)
+    parser.add_argument("--no-printElapsedTime", help="don't print elapsed time", dest='printElapsedTime', action='store_false')
     
+    parser.add_argument("--setDefaultFlags", help="set default control flags", dest='setDefaultControlFlags', action='store_true', default=True)
+    parser.add_argument("--no-setDefaultFlags", help="don't set default control flags", dest='setDefaultControlFlags', action='store_false')
+    
+    
+    args = parser.parse_args()
+    user = args.user
+    if args.host:
+        host = args.host
+    else:
+        host = 'localhost'
+    if args.out:
+        out = args.out
+    else:
+        out = ''
+    if args.err:
+        err = args.err
+    else:
+        err = ''
+    if args.mail:
+        mail = args.mail
+    else:
+        mail = ''
+    str_cmd = args.command
+    if args.scheduler:
+        try:
+            shell = eval('crun_hpc_' + args.scheduler + '(remoteUser=user, remoteHost=host, emailUser=mail, remoteStdOut=out, remoteStdErr=err)')
+        except NameError:
+            raise ValueError("Wrong cluster scheduler type input. Please run with the -h \
+                             option to see posible values")
+    elif args.user:
+        shell = crun(remoteUser=user, remoteHost=host, emailUser=mail, remoteStdOut=out, remoteStdErr=err)
+        shell.echo(False)
+        shell.echoStdOut(True)
+        shell.waitForChild(True)
+    else:
+        shell = crun(emailUser=mail)
+        shell.echo(False)
+        shell.echoStdOut(True)
+        shell.waitForChild(True)
+        
     # Set some parameters for this shell
-    shell.echo()
-    shell.echoStdOut()
-    shell.detach()
-    # shell.dontRun()
+    if not args.setDefaultControlFlags:
+        shell.echo(args.echo)                       # echo actual shell command to stdout
+        shell.echoStdOut(args.echoStdOut)           # capture and echo child stdout
+        shell.detach(args.detach)                   # child &
+        shell.sshDetach(args.sshDetach)             # ssh .... &
+        shell.waitForChild(args.waitForChild)       # block on child
+    if args.scheduler: shell.jobID('j' + str(randint(1,1000)))
+    if mail: shell.emailWhenDone(True)
 
     # And now run it!
     misc.tic()
     shell(str_cmd)
-    print "Elapsed time = %f seconds" % misc.toc()
+    #print shell.stdout()
+    if args.printElapsedTime: print("Elapsed time = %f seconds" % misc.toc())
+    
+
+
     
     
