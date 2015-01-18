@@ -2,10 +2,6 @@
   "name": "_common",
   "version": "0.0.0",
   "description": "Provides common functionality used among many FNNDSC projects.",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/FNNDSC/_common.git"
