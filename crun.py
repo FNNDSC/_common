@@ -921,6 +921,20 @@ class crun_hpc_chpc(crun_hpc):
         for cmd in cmd_list:
             self.__call__(cmd)
 
+    def blockOnChild(self):
+        '''
+        Check the scheduler queue until all internal jobIDs are clear.
+        '''
+        b_jobsInQueue   = True
+        shell           = crun()
+        shell.waitForChild(True)
+        while b_jobsInQueue:
+            b_jobsInQueue = False
+            time.sleep(5)
+            for jID in self._jobID_list:
+                shell('qstat | grep %s | wc -l' % jID)
+                b_jobsInQueue = b_jobsInQueue or int(shell.stdout().strip())
+
 
 class crun_hpc_lsf(crun_hpc):
 
