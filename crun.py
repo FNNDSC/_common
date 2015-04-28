@@ -586,9 +586,10 @@ class crun_hpc(crun):
         self._str_emailUser             = ''
 
         for key, value in kwargs.iteritems():
-            if key == "schedulerStdOutDir":  self._str_schedulerStdOutDir  = value
-            if key == "schedulerStdErrDir":  self._str_schedulerStdErrDir  = value
-            if key == "emailUser":   self._str_emailUser = value
+            if key == "schedulerStdOutDir":     self._str_schedulerStdOutDir    = value
+            if key == "schedulerStdErrDir":     self._str_schedulerStdErrDir    = value
+            if key == "emailUser":              self._str_emailUser             = value
+            if key == "queue":                  self._str_queue                 = value
         misc.mkdir(self._str_schedulerStdOutDir)
         misc.mkdir(self._str_schedulerStdErrDir)
 
@@ -644,9 +645,9 @@ class crun_hpc_launchpad(crun_hpc):
 
         self._str_emailUser             = "rudolph"
         if len(self._str_remoteUser):
-            self._str_jobInfoDir    = "/pbs/%s" % self._str_remoteUser
+            self._str_jobInfoDir        = "/pbs/%s" % self._str_remoteUser
         else:
-            self._str_jobInfoDir    = "/pbs/%s" % self._str_emailUser
+            self._str_jobInfoDir        = "/pbs/%s" % self._str_emailUser
         self._b_singleQuoteCmd          = True
         self._str_queue                 = "max200"
 
@@ -656,9 +657,12 @@ class crun_hpc_launchpad(crun_hpc):
         self._str_scheduleArgs          = ''
 
         #configuration
-        self._b_detach = False
-        self._b_disassociate = False
-        self._b_waitForChild = True
+        self._b_detach                  = False
+        self._b_disassociate            = False
+        self._b_waitForChild            = True
+
+        for key, value in kwargs.iteritems():
+            if key == "queue": self._str_queue = value
 
     def __call__(self, str_cmd, **kwargs):
         self.scheduleArgs()
@@ -726,6 +730,19 @@ class crun_hpc_launchpad(crun_hpc):
         for cmd in cmd_list:
             self.__call__(cmd)
 
+    def blockOnChild(self):
+        '''
+        Check the scheduler queue until all internal jobIDs are clear.
+        '''
+        b_jobsInQueue   = True
+        shell           = crun()
+        shell.waitForChild(True)
+        while b_jobsInQueue:
+            b_jobsInQueue = False
+            time.sleep(5)
+            for jID in self._jobID_list:
+                shell('qstat | grep %s | grep -v C | wc -l' % jID)
+                b_jobsInQueue = b_jobsInQueue or int(shell.stdout().strip())
 
 
 
@@ -1282,8 +1299,9 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--scheduler", help="cluster scheduler type: \
         crun_hpc_launchpad, crun_hpc_slurm, crun_hpc_chpc, crun_hpc_lsf, crun_hpc_lsf_crit \
         crun_hpc_mosix, crun_hpc_mosix_HPtest, crun_hpc_mosixbash")
-    parser.add_argument("-o", "--out", help="remote standard output dir (or file)")
-    parser.add_argument("-e", "--err", help="remote standard error dir (or file)")
+    parser.add_argument("-q", "--queue", help="queue to use", dest='queue')
+    parser.add_argument("-o", "--out", help="remote standard output location (dir or file depending on constructor context)")
+    parser.add_argument("-e", "--err", help="remote standard error location (dir or file depending on constructor context)")
     parser.add_argument("-m", "--mail", help="user mail")
 
     parser.add_argument("--waitForChild", help="wait for child process", dest='waitForChild', action='store_true', default=False)
@@ -1338,6 +1356,8 @@ if __name__ == '__main__':
     if args.scheduler:
         try:
             shell = eval(args.scheduler + '(remoteUser=user, remoteHost=host, remotePort=port, emailUser=mail, schedulerStdOutDir=out, schedulerStdErrDir=err)')
+            if args.queue:
+                shell.queueName(args.queue)
         except NameError:
             sys.exit("error: wrong cluster scheduler type input. Please run with the -h option to see posible values")
     elif args.user:
