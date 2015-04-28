@@ -534,17 +534,17 @@ class crun_hpc(crun):
         else:
             return self._str_clusterScheduler
 
-    def schedulerStdOut(self, *args):
+    def schedulerStdOutDir(self, *args):
         if len(args):
-            self._str_schedulerStdOut = args[0]
+            self._str_schedulerStdOutDir = args[0]
         else:
-            return self._str_schedulerStdOut
+            return self._str_schedulerStdOutDir
 
-    def schedulerStdErr(self, *args):
+    def schedulerStdErrDir(self, *args):
         if len(args):
-            self._str_schedulerStdErr = args[0]
+            self._str_schedulerStdErrDir = args[0]
         else:
-            return self._str_schedulerStdErr
+            return self._str_schedulerStdErrDir
 
     def blockOnChild(self):
         raise NotImplementedError("abstract method crun_hpc.blockOnChild()")
@@ -572,10 +572,10 @@ class crun_hpc(crun):
         self._str_jobID                 = ''
         # List of all job IDs that have been schedule with this object
         self._jobID_list                = []
-        # These define the stdout/stderr that schedulers will often use
+        # These define the stdout/stderr dirs that schedulers will often use
         # to capture the outputs of executed applications.
-        self._str_schedulerStdOut       = ''
-        self._str_schedulerStdErr       = ''
+        self._str_schedulerStdOutDir       = '/tmp'
+        self._str_schedulerStdErrDir       = '/tmp'
 
         # Host subset spec
         self._b_scheduleOnHostOnly      = False
@@ -586,9 +586,11 @@ class crun_hpc(crun):
         self._str_emailUser             = ''
 
         for key, value in kwargs.iteritems():
-            if key == "remoteStdOut":  self._str_schedulerStdOut  = value
-            if key == "remoteStdErr":  self._str_schedulerStdErr  = value
+            if key == "schedulerStdOutDir":  self._str_schedulerStdOutDir  = value
+            if key == "schedulerStdErrDir":  self._str_schedulerStdErrDir  = value
             if key == "emailUser":   self._str_emailUser = value
+        misc.mkdir(self._str_schedulerStdOutDir)
+        misc.mkdir(self._str_schedulerStdErrDir)
 
 
     def __call__(self, str_cmd, **kwargs):
@@ -680,7 +682,7 @@ class crun_hpc_launchpad(crun_hpc):
         else:
             self._str_scheduleArgs      = ''
             self._str_scheduleArgs += "-O %s -E %s " % (
-                self._str_schedulerStdOut, self._str_schedulerStdErr)
+                self._str_schedulerStdOutDir, self._str_schedulerStdErrDir)
             if self._b_emailWhenDone and len(self._str_emailUser):
                 self._str_scheduleArgs += "-m %s " % self._str_emailUser
             self._str_scheduleArgs     += "-q %s -c " % self._str_queue
@@ -775,7 +777,7 @@ class crun_hpc_slurm(crun_hpc):
         else:
             self._str_scheduleArgs      = ''
             self._str_scheduleArgs += "--job-name %s -o %s -e %s " % (
-                self._str_jobID, self._str_schedulerStdOut, self._str_schedulerStdErr)
+                self._str_jobID, self._str_schedulerStdOutDir, self._str_schedulerStdErrDir)
             if self._b_emailWhenDone and len(self._str_emailUser):
                 self._str_scheduleArgs += "--mail-user=%s " % self._str_emailUser
             self._str_scheduleArgs     += "-p %s " % self._str_queue
@@ -872,7 +874,7 @@ class crun_hpc_chpc(crun_hpc):
         else:
             self._str_scheduleArgs      = ''
             self._str_scheduleArgs += "-o %s -e %s " % (
-                self._str_schedulerStdOut, self._str_schedulerStdErr)
+                self._str_schedulerStdOutDir, self._str_schedulerStdErrDir)
             if self._b_emailWhenDone and len(self._str_emailUser):
                 self._str_scheduleArgs += "-M %s " % self._str_emailUser
             self._str_scheduleArgs     += "-q %s -- " % self._str_queue
@@ -918,6 +920,20 @@ class crun_hpc_chpc(crun_hpc):
         cmd_list = super(crun_hpc_chpc, self)._buildKillCmd('qdel ', jobID)
         for cmd in cmd_list:
             self.__call__(cmd)
+
+    def blockOnChild(self):
+        '''
+        Check the scheduler queue until all internal jobIDs are clear.
+        '''
+        b_jobsInQueue   = True
+        shell           = crun()
+        shell.waitForChild(True)
+        while b_jobsInQueue:
+            b_jobsInQueue = False
+            time.sleep(5)
+            for jID in self._jobID_list:
+                shell('qstat | grep %s | wc -l' % jID)
+                b_jobsInQueue = b_jobsInQueue or int(shell.stdout().strip())
 
 
 class crun_hpc_lsf(crun_hpc):
@@ -979,7 +995,7 @@ class crun_hpc_lsf(crun_hpc):
                 self._str_scheduleArgs += "-u %s -N " % self._str_emailUser
             self._str_scheduleArgs += "-S 20000 -J %s " % self._str_jobID
             self._str_scheduleArgs += "-o %s -e %s " % (
-                self._str_schedulerStdOut, self._str_schedulerStdErr)
+                self._str_schedulerStdOutDir, self._str_schedulerStdErrDir)
             self._str_scheduleArgs     += "-q %s " % self._str_queue
         return self._str_scheduleArgs
 
@@ -1105,12 +1121,14 @@ class crun_hpc_mosix(crun_hpc):
                 self._str_scheduleArgs += "-r%s " % self._str_scheduleHostOnly
             else:
                 self._str_scheduleArgs += "-b "
-            if len(self._str_schedulerStdOut) or len(self._str_schedulerStdErr):
+            if len(self._str_schedulerStdOutDir) or len(self._str_schedulerStdErrDir):
                 self._str_cmdSuffix = ''
-            if len(self._str_schedulerStdOut):
-                self._str_cmdSuffix += " >%s " % self._str_schedulerStdOut
-            if len(self._str_schedulerStdErr):
-                self._str_cmdSuffix += " 2>%s " % self._str_schedulerStdErr
+            if len(self._str_schedulerStdOutDir):
+                self._str_cmdSuffix += " >%s/mosixjob-%s.out " % (self._str_schedulerStdOutDir,
+                                                     self._str_jobID)
+            if len(self._str_schedulerStdErrDir):
+                self._str_cmdSuffix += " 2>%s/mosixjob-%s.err " % (self._str_schedulerStdErrDir,
+                                                      self._str_jobID)
         return self._str_scheduleArgs
 
     def killJob(self, jobID=None):
@@ -1260,11 +1278,12 @@ if __name__ == '__main__':
                                      command line apps on a cluster.")
     parser.add_argument("-u", "--user", help="remote user")
     parser.add_argument("--host", help="connection host")
+    parser.add_argument("--port", help="connection port on remote host", dest='port', action='store', default='22')
     parser.add_argument("-s", "--scheduler", help="cluster scheduler type: \
         crun_hpc_launchpad, crun_hpc_slurm, crun_hpc_chpc, crun_hpc_lsf, crun_hpc_lsf_crit \
         crun_hpc_mosix, crun_hpc_mosix_HPtest, crun_hpc_mosixbash")
-    parser.add_argument("-o", "--out", help="remote standard output file")
-    parser.add_argument("-e", "--err", help="remote standard error file")
+    parser.add_argument("-o", "--out", help="remote standard output dir (or file)")
+    parser.add_argument("-e", "--err", help="remote standard error dir (or file)")
     parser.add_argument("-m", "--mail", help="user mail")
 
     parser.add_argument("--waitForChild", help="wait for child process", dest='waitForChild', action='store_true', default=False)
@@ -1301,6 +1320,8 @@ if __name__ == '__main__':
         host = args.host
     else:
         host = 'localhost'
+    if args.port:
+        port = args.port
     if args.out:
         out = args.out
     else:
@@ -1316,11 +1337,11 @@ if __name__ == '__main__':
 
     if args.scheduler:
         try:
-            shell = eval(args.scheduler + '(remoteUser=user, remoteHost=host, emailUser=mail, remoteStdOut=out, remoteStdErr=err)')
+            shell = eval(args.scheduler + '(remoteUser=user, remoteHost=host, remotePort=port, emailUser=mail, schedulerStdOutDir=out, schedulerStdErrDir=err)')
         except NameError:
             sys.exit("error: wrong cluster scheduler type input. Please run with the -h option to see posible values")
     elif args.user:
-        shell = crun(remoteUser=user, remoteHost=host, emailUser=mail, remoteStdOut=out, remoteStdErr=err)
+        shell = crun(remoteUser=user, remoteHost=host, remotePort=port, emailUser=mail, schedulerStdOutDir=out, schedulerStdErrDir=err)
         shell.echo(False)
         shell.echoStdOut(True)
         shell.waitForChild(True)
