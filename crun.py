@@ -328,7 +328,6 @@ class crun(object):
 
         if self._b_disassociate:
             self._str_shellCmd  = "( %s ) &" % self._str_shellCmd
-        ret                     = 0
 
         if self._b_echoCmd: sys.stdout.write('%s\n' % self._str_shellCmd)
         if self._b_runCmd:
@@ -669,7 +668,7 @@ class crun_hpc_launchpad(crun_hpc):
         if len(self._str_workingDir):
             str_cmd = "cd %s ; %s" % (self._str_workingDir, str_cmd)
         #get job id
-        str_cmd = str_cmd + ' 2>&1 | tail -n 1 | awk -F \. \'\\\'\'{print $1}\'\\\'\''
+        #str_cmd = str_cmd + " 2>&1 | tail -n 1 | awk -F \. \'{print $1}\'"
         self._str_scheduleCmd       = self._str_scheduler
         out = crun.__call__(self, str_cmd, **kwargs)
         #take stdout from out and process it to get the job id number
